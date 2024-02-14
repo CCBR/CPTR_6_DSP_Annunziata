@@ -1,0 +1,259 @@
+{
+  "Name": "Mouse NGS Immune Activation Status Protein", 
+  "Version": 1.0, 
+  "AnalyteType": "Protein", 
+  "MinArea": 1600, 
+  "MinNuclei": 20, 
+  "Compatibility": "01", 
+  "Date": "210802", 
+  "ReporterSpace": "0", 
+  "ProbeGroups": [
+    {
+      "Name": "Th cells", 
+      "Targets": [
+        "CD40L"
+      ]
+    }, 
+    {
+      "Name": "Checkpoint", 
+      "Targets": [
+        "PD-1", 
+        "PD-L1", 
+        "CD86"
+      ]
+    }, 
+    {
+      "Name": "Memory", 
+      "Targets": [
+        "CD127/IL7RA"
+      ]
+    }, 
+    {
+      "Name": "Naive", 
+      "Targets": [
+        "CD127/IL7RA"
+      ]
+    }, 
+    {
+      "Name": "Myeloid Activation", 
+      "Targets": [
+        "PD-L1", 
+        "CD86"
+      ]
+    }, 
+    {
+      "Name": "T cells", 
+      "Targets": [
+        "CD27", 
+        "PD-1", 
+        "CD127/IL7RA", 
+        "CD40L"
+      ]
+    }, 
+    {
+      "Name": "Myeloid", 
+      "Targets": [
+        "CD86"
+      ]
+    }, 
+    {
+      "Name": "T cell Activation", 
+      "Targets": [
+        "CD27", 
+        "CD44", 
+        "ICOS", 
+        "PD-1", 
+        "CD40L"
+      ]
+    }
+  ], 
+  "ProbeGroupVersion": 1.0, 
+  "Targets": [
+    {
+      "GeneID": [
+        54167
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "ICOS", 
+      "SystematicName": [
+        "Icos"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0048428", 
+      "RTS_Seq": "GGATGCCGCCTA", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00086.1", 
+          "Accession": [
+            "Q5SUZ7", 
+            "Q9WVS0", 
+            "Q3V3X2"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        18566
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "PD-1", 
+      "SystematicName": [
+        "Pdcd1"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0048405", 
+      "RTS_Seq": "AATGTAATATAC", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00065.1", 
+          "Accession": [
+            "Q544F3", 
+            "Q02242"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        12505
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "CD44", 
+      "SystematicName": [
+        "Cd44"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0048426", 
+      "RTS_Seq": "GTCTTGAGGTGC", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00261.1", 
+          "Accession": [
+            "Q3U8S1", 
+            "Q80X37", 
+            "A2APM3", 
+            "A2APM2", 
+            "A2APM1", 
+            "A2APM4", 
+            "P15379"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        21940
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "CD27", 
+      "SystematicName": [
+        "Cd27"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0048396", 
+      "RTS_Seq": "TTCAAGGTGTGG", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00089.1", 
+          "Accession": [
+            "D3Z7W5", 
+            "P41272", 
+            "Q3U4X0", 
+            "B7ZW87"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        12524
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "CD86", 
+      "SystematicName": [
+        "Cd86"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0048483", 
+      "RTS_Seq": "CACCGTCTATGC", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00273.1", 
+          "Accession": [
+            "Q549Q9", 
+            "P42082", 
+            "Q61238"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        21947
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "CD40L", 
+      "SystematicName": [
+        "Cd40lg"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0048392", 
+      "RTS_Seq": "CCGGATACTTAC", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00088.1", 
+          "Accession": [
+            "P27548", 
+            "Q0VEI3"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        60533
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "PD-L1", 
+      "SystematicName": [
+        "Cd274"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0020847", 
+      "RTS_Seq": "CCTTCGGCTAGG", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00080.1", 
+          "Accession": [
+            "Q9EP73", 
+            "Q3U472"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        16197
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "CD127/IL7RA", 
+      "SystematicName": [
+        "Il7r"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0020785", 
+      "RTS_Seq": "GGCGCCTAATAC", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00036.1", 
+          "Accession": [
+            "Q8C9W4", 
+            "P16872", 
+            "Q5FW78"
+          ]
+        }
+      ]
+    }
+  ]
+}

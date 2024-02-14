@@ -1,0 +1,315 @@
+{
+  "Name": "Mouse NGS Myeloid", 
+  "Version": 1.0, 
+  "AnalyteType": "Protein", 
+  "MinArea": 1600, 
+  "MinNuclei": 20, 
+  "Compatibility": "01", 
+  "Date": "210802", 
+  "ReporterSpace": "0", 
+  "ProbeGroups": [
+    {
+      "Name": "DC", 
+      "Targets": [
+        "CD11c", 
+        "CD11b"
+      ]
+    }, 
+    {
+      "Name": "Antigen Presentation", 
+      "Targets": [
+        "MHC II"
+      ]
+    }, 
+    {
+      "Name": "Myeloid Suppression", 
+      "Targets": [
+        "CD39", 
+        "CD163"
+      ]
+    }, 
+    {
+      "Name": "Monocyte", 
+      "Targets": [
+        "CD14"
+      ]
+    }, 
+    {
+      "Name": "Neutrophil", 
+      "Targets": [
+        "Ly6G/Ly6C"
+      ]
+    }, 
+    {
+      "Name": "Macrophage", 
+      "Targets": [
+        "CD68", 
+        "CD163", 
+        "F4/80"
+      ]
+    }, 
+    {
+      "Name": "Myeloid Activation", 
+      "Targets": [
+        "CD40"
+      ]
+    }, 
+    {
+      "Name": "Myeloid", 
+      "Targets": [
+        "CD11c", 
+        "CD68", 
+        "CD40", 
+        "CD14", 
+        "CD163", 
+        "CD11b", 
+        "Ly6G/Ly6C", 
+        "F4/80"
+      ]
+    }, 
+    {
+      "Name": "MHC2", 
+      "Targets": [
+        "MHC II"
+      ]
+    }, 
+    {
+      "Name": "M2 Macrophage", 
+      "Targets": [
+        "CD163", 
+        "CD68"
+      ]
+    }
+  ], 
+  "ProbeGroupVersion": 1.0, 
+  "Targets": [
+    {
+      "GeneID": [
+        12495
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "CD39", 
+      "SystematicName": [
+        "Entpd1"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0020850", 
+      "RTS_Seq": "GGACAGTCGATA", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00105.1", 
+          "Accession": [
+            "P55772", 
+            "Q8CDV7", 
+            "Q544U5"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        14961, 
+        14969
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "MHC II", 
+      "SystematicName": [
+        "H2-Ab1", 
+        "H2-Eb1"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0020845", 
+      "RTS_Seq": "CGCTTAACGAAG", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00067.1", 
+          "Accession": [
+            "Q8BPA0", 
+            "O78196", 
+            "Q3TD53", 
+            "P14483"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        21939
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "CD40", 
+      "SystematicName": [
+        "Cd40"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0048415", 
+      "RTS_Seq": "CTGGCGATTCGC", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00087.1", 
+          "Accession": [
+            "P27512"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        12514
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "CD68", 
+      "SystematicName": [
+        "Cd68"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0020846", 
+      "RTS_Seq": "TACGACCGCGAA", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00436.1", 
+          "Accession": [
+            "P31996"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        12475
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "CD14", 
+      "SystematicName": [
+        "Cd14"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0048416", 
+      "RTS_Seq": "GTGAGTTCCTGA", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00091.1", 
+          "Accession": [
+            "P10810", 
+            "Q4FJP7", 
+            "Q3UE54", 
+            "Q3UB18"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        17067, 
+        546644
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "Ly6G/Ly6C", 
+      "SystematicName": [
+        "Ly6g", 
+        "Ly6c1"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0020842", 
+      "RTS_Seq": "ACCTGTGGCGGA", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00085.1", 
+          "Accession": [
+            "A0A087WNZ5", 
+            "P0CW02", 
+            "A0A087WRG9", 
+            "A0A087WQF5"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        13733
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "F4/80", 
+      "SystematicName": [
+        "Adgre1"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0020844", 
+      "RTS_Seq": "CGCCTACCGACT", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00071.1", 
+          "Accession": [
+            "Q61549", 
+            "Q3U9R0"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        93671
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "CD163", 
+      "SystematicName": [
+        "Cd163"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0020826", 
+      "RTS_Seq": "TATTACTCACGA", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00052.1", 
+          "Accession": [
+            "Q2VLH6", 
+            "B7ZMW6"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        16409
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "CD11b", 
+      "SystematicName": [
+        "Itgam"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0020849", 
+      "RTS_Seq": "TATGGAATTGAG", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00095.1", 
+          "Accession": [
+            "E9Q604", 
+            "G5E8F1"
+          ]
+        }
+      ]
+    }, 
+    {
+      "GeneID": [
+        16411
+      ], 
+      "AnalyteType": "Protein", 
+      "DisplayName": "CD11c", 
+      "SystematicName": [
+        "Itgax"
+      ], 
+      "CodeClass": "Endogenous", 
+      "RTS_ID": "RTS0020843", 
+      "RTS_Seq": "GTGCCGAATAAT", 
+      "Probes": [
+        {
+          "ProbeID": "DPROT_00072.1", 
+          "Accession": [
+            "Q9QXH4"
+          ]
+        }
+      ]
+    }
+  ]
+}
