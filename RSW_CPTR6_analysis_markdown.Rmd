@@ -94,38 +94,130 @@ print(sdesign.list$object)
 print(sdesign.list$sankey.plot)
 ```
 
+# Custom Sankey
+
+```{r}
+
+object <- sdesign.list$object
+lane1 <- "Age of mouse (old or young)"
+lane2 <- "class"
+lane3 <- "Animal #"
+lane4 <- "segment"
+fill_lane <- "class"
+
+
+#Establish variables for the Sankey plot
+x <- id <- y <- n <- NULL
+
+# select the annotations we want to show, use `` to surround column
+# names with spaces or special symbols
+
+# Create a count matrix
+count.mat <- count(pData(object), 
+                   !!as.name(lane1), 
+                   !!as.name(lane2), 
+                   !!as.name(lane3), 
+                   !!as.name(lane4))
+
+# Remove any rows with NA values
+na.per.column <- colSums(is.na(count.mat))
+na.total.count <- sum(na.per.column)
+                                             
+if(na.total.count > 0){
+  count.mat <- count.mat[!rowSums(is.na(count.mat)),]
+  rownames(count.mat) <- 1:nrow(count.mat)
+}
+ 
+
+# Gather the data and plot in order: lane 1, lane 2, ..., lane n
+# gather_set_data creates x, id, y, and n fields within sankey.count.data
+# Establish the levels of the Sankey
+sankey.count.data <- gather_set_data(count.mat, 1:4)
+
+sankey.count.data$x <-
+    factor(
+      sankey.count.data$x,
+      levels = c(as.name(lane1), as.name(lane2), as.name(lane3), as.name(lane4))
+    )
+    
+  # For position of Sankey 100 segment scale
+  adjust.scale.pos = 0
+
+# plot Sankey diagram
+sankey.plot <-
+  ggplot(sankey.count.data,
+         aes(
+           x,
+           id = id,
+           split = y,
+           value = n
+         )) +
+  geom_parallel_sets(aes(fill = !!as.name(fill_lane)), alpha = 0.5, axis.width = 0.1) +
+  geom_parallel_sets_axes(axis.width = 0.2) +
+  geom_parallel_sets_labels(color = "gray",
+                            size = 5,
+                            angle = 0) +
+  theme_classic(base_size = 14) +
+  theme(
+    legend.position = "bottom",
+    axis.ticks.y = element_blank(),
+    axis.line = element_blank(),
+    axis.text.y = element_blank()
+  ) +
+  scale_y_continuous(expand = expansion(0)) +
+  scale_x_discrete(expand = expansion(0)) +
+  labs(x = "", y = "") +
+  annotate(
+    geom = "segment",
+    x = (4.25 - adjust.scale.pos),
+    xend = (4.25 - adjust.scale.pos),
+    y = 20,
+    yend = 120,
+    lwd = 2
+  ) +
+  annotate(
+    geom = "text",
+    x = (4.19 - adjust.scale.pos),
+    y = 70,
+    angle = 90,
+    size = 5,
+    hjust = 0.5,
+    label = "100 segments"
+  )
+
+print(sankey.plot)
+
+```
+
+
 ## 2. QC Preprocessing:
 
 ```{r QC Preprocessing, echo=TRUE}
 
 library(GeomxTools)
+library(tibble)
+library(dplyr)
 
+results.folder <- "/rstudio-files/ccr-dceg-data/users/ned/CPTR/CPTR-6 Annunziata/CPTR_6_DSP_Annunziata/results/"
+
+# Set the QC flags using the Nanostring defaults
 qc.output <-  setSegmentQCFlags(sdesign.list$object, 
                                 qcCutoffs = list(
-                                  min.segment.reads = 1000, 
-                                  percent.aligned = 80, 
-                                  percent.trimmed = 80, 
-                                  percent.stitched = 80, 
-                                  percent.saturation = 50, 
-                                  min.negative.count = 10,   
-                                  max.ntc.count = 60,     
-                                  min.nuclei = 20,         
-                                  min.area = 16000))
+                                  minSegmenReads = 1000, 
+                                  percentAligned = 80, 
+                                  percentTrimmed = 80, 
+                                  percentStitched = 80, 
+                                  percentSaturation = 50, 
+                                  minNegativeCount = 10,   
+                                  maxNTCCount = 60, 
+                                  minArea = 16000))
 
-# Revioew QC table low sequenced AOIs
+# Review QC table low sequenced AOIs
 qc <- protocolData(qc.output)
 qc.df <- qc@data
 print(qc.df)
 
-# low sequenced ROIs
-lowSaturation <- which(as.data.frame(protocolData(qc.output)[["QCFlags"]])["LowSaturation"] == TRUE)
-
-# remove low quality ROIs
-passedQC <- qc.output[, -lowSaturation]
-dim(qc.output)
-dim(passedQC)
-
-
+# Review control probes
 hk.names <- hkNames(qc.output)
 print(hk.names)
 
@@ -138,19 +230,163 @@ proteinOrder <- qcProteinSignalNames(object = qc.output, neg.names = igg.names)
 
 fig()
 
-proteinOrder <- qcProteinSignalNames(object = qc.output, neg.names = igg.names)
+# Save the feature plot
+feature.plot <- fig()
 
-CD27 <- which(proteinOrder == "CD27")
+# Save the plot as an image file (e.g., PNG, PDF, JPEG)
+ggsave(file.path(paste0(results.folder, "feature_plot.png")), plot = feature.plot)
 
-fig()
-rect(xleft = 3.5, xright = CD27, ybottom = -6, ytop = 10, density = 2, col = "red", lty = 3)
+# Generate a list of flagged segments
+
+## Annotation columns
+object <- qc.output
+annotation.data <- pData(object)
+  
+
+## Annotation column names
+annotation.column.names <- colnames(annotation.data)
+
+## Start the list of selected annotation columns
+select.annotation.columns <- "segmentID"
+
+## Check if area and nuclei are included
+if("area" %in% annotation.column.names){ 
+  select.annotation.columns <- c("area", select.annotation.columns)
+} 
+if("nuclei" %in% annotation.column.names){ 
+  select.annotation.columns <- c("nuclei", select.annotation.columns)
+}
+
+## The annotation names based on selected columns as a df
+## drop = FALSE ensures single column is still a df
+select.annotation.data <- annotation.data[, select.annotation.columns, 
+                                          drop = FALSE]
+select.annotation.data <- rownames_to_column(select.annotation.data, 
+                                             var = "SampleID")
+
+# Gather the QC flagged rows
+
+## Gather the qc data
+segment.qc.data <- object@protocolData@data
+
+## The nested flag dataframe
+flag.columns <- segment.qc.data %>% select(starts_with("QCFlags"))
+
+## Rows with a positive flag
+flagged.rows <- flag.columns[rowSums(flag.columns$QCFlags == TRUE) > 0, ]
+flagged.rows <- as.data.frame(flagged.rows)
+flagged.rows <- rownames_to_column(flagged.rows, var = "SampleID")
+
+# Gather the additional QC data
+
+## Additional QC column names
+add.qc.column.names <- c("Raw", 
+                         "Trimmed (%)",
+                         "Stitched (%)",
+                         "Aligned (%)",
+                         "Saturated (%)")
+
+## Check for NTC column
+if("NTC" %in% colnames(segment.qc.data)){
+  add.qc.column.names <- c("NTC", add.qc.column.names)
+}
+
+## Additional QC data
+add.qc.columns <- segment.qc.data[, add.qc.column.names]
+add.qc.columns <- rownames_to_column(add.qc.columns, var = "SampleID")
+
+## Convert single column matrix and dataframes into vectors
+## May cause an issue if there is more then one PKC file
+matrix.column <- add.qc.columns$NegGeoMean
+vector.column <- as.vector(matrix.column)
+add.qc.columns$NegGeoMean <- vector.column
+
+add.qc.columns$TrimmedPerc <- sapply(add.qc.columns$`Trimmed (%)`, 
+                                     function(x) unname(unlist(x)))
+add.qc.columns$TrimmedPerc <- as.vector(add.qc.columns$TrimmedPerc[,1])
+
+add.qc.columns$StitchedPerc <- sapply(add.qc.columns$`Stitched (%)`, 
+                                     function(x) unname(unlist(x)))
+add.qc.columns$StitchedPerc <- as.vector(add.qc.columns$StitchedPerc[,1])
+
+add.qc.columns$AlignedPerc <- sapply(add.qc.columns$`Aligned (%)`, 
+                                     function(x) unname(unlist(x)))
+add.qc.columns$AlignedPerc <- as.vector(add.qc.columns$AlignedPerc[,1])
+
+add.qc.columns$SaturatedPerc <- sapply(add.qc.columns$`Saturated (%)`, 
+                                     function(x) unname(unlist(x)))
+add.qc.columns$SaturatedPerc <- as.vector(add.qc.columns$SaturatedPerc[,1])
+
+## Remove the nested data frames
+add.qc.columns <- add.qc.columns[, -which(names(add.qc.columns) == "Trimmed (%)")]
+add.qc.columns <- add.qc.columns[, -which(names(add.qc.columns) == "Stitched (%)")]
+add.qc.columns <- add.qc.columns[, -which(names(add.qc.columns) == "Aligned (%)")]
+add.qc.columns <- add.qc.columns[, -which(names(add.qc.columns) == "Saturated (%)")]
+
+# Create the final QC flag data frame with all additional info
+
+## Merge the annotation, flag, and additional qc data frames
+merge.qc.flagged.df <- merge(merge(select.annotation.data, add.qc.columns, 
+                                   by = "SampleID"), 
+                             flagged.rows, by = "SampleID")
+
+## Reorder columns so that info is next to flag
+final.column.order <- c("SampleID", 
+                        "segmentID", 
+                        "Raw", 
+                        "LowReads", 
+                        "TrimmedPerc", 
+                        "LowTrimmed", 
+                        "StitchedPerc", 
+                        "LowStitched", 
+                        "AlignedPerc", 
+                        "LowAligned", 
+                        "SaturatedPerc", 
+                        "LowSaturation")
+
+## Add NTC, area, and/or nuclei if part of annotation
+if("NTC" %in% colnames(segment.qc.data)){ 
+  final.column.order <- c(final.column.order, "NTC", "HighNTC")
+} 
+if("area" %in% annotation.column.names){ 
+  final.column.order <- c(final.column.order, "area", "LowArea")
+} 
+if("nuclei" %in% annotation.column.names){ 
+  final.column.order <- c(final.column.order, "nuclei", "LowNuclei")
+}
+
+## The final QC flag df
+final.flagged.segment.df <- merge.qc.flagged.df[, final.column.order]
+
+## Final renaming of columns
+colnames(final.flagged.segment.df)[colnames(final.flagged.segment.df) == "Raw"] <- "RawReadCount"
+
+print(final.flagged.segment.df)
 
 ```
 
 ## 3. Filtering:
 
 ```{r Filtering, echo=TRUE}
-    
+  
+  # Can remove segments based on flags
+  # Below is how you would remove segments flagged with low saturation
+
+  # low sequenced ROIs
+  lowSaturation <- which(as.data.frame(protocolData(qc.output)[["QCFlags"]])["LowSaturation"] == TRUE)
+
+  # remove low quality ROIs and compare the before and after
+  passedQC <- qc.output[, -lowSaturation]
+  dim(qc.output)
+  dim(passedQC)
+
+```
+
+
+## 4. Normalization:
+  
+```{r Normalization, echo=TRUE}
+  
   plotConcordance(object = qc.output, targetList = igg.names, plotFactor = "class")
 
   normfactors <- computeNormalizationFactors(object = qc.output)
@@ -163,47 +399,163 @@ rect(xleft = 3.5, xright = CD27, ybottom = -6, ytop = 10, density = 2, col = "re
   norm.neg <- normalize(qc.output, norm_method="neg", toElt = "neg_norm")
   
   norm.q3 <- normalize(qc.output, norm_method="quant", desiredQuantile = .75, toElt = "q_norm")
-
-```
-
-
-## 4. Normalization:
   
-```{r Normalization, echo=TRUE}
   
-    q3.normalization.output <- geomxNorm(
-                                  object = filtering.output$object, 
-                                  norm = "q3")
+  fig <- qcProteinSignal(object = norm.hk, neg.names = igg.names)
+
+  proteinOrder <- qcProteinSignalNames(object = norm.hk, neg.names = igg.names)
+
+  fig()
+  
+  
+  # Export all read count for raw and normalization methods
+  
+  ## raw
+  raw_counts <- as.data.frame(norm.hk@assayData$exprs)
+  feature_list <- rownames(raw_counts)
+  raw_counts <- cbind("feature" = feature_list, raw_counts)
+  
+  ## Housekeeping Normalization
+  hk.norm_counts <- norm.hk@assayData$hk_norm
+  feature_list <- rownames(hk.norm_counts)
+  hk.norm_counts <- cbind("feature" = feature_list, hk.norm_counts)
+  
+  ## Negative Normalization
+  neg.norm_counts <- norm.neg@assayData$neg_norm
+  feature_list <- rownames(neg.norm_counts)
+  neg.norm_counts <- cbind("feature" = feature_list, neg.norm_counts)
+  
+  ## Q3 Normalization
+  q3.norm_counts <- norm.q3@assayData$q_norm
+  feature_list <- rownames(q3.norm_counts)
+  q3.norm_counts <- cbind("feature" = feature_list, q3.norm_counts)
+  
+  # Export all count tables
+  
+  export_counts <- TRUE
+  
+  if(export_counts == TRUE){
     
-    print(q3.normalization.output$multi.plot)
-    print(q3.normalization.output$boxplot.raw)
-    print(q3.normalization.output$boxplot.norm)
+    write.csv(raw_counts, 
+              file.path(paste0(results.folder, "raw_counts.csv")), 
+              row.names = FALSE)
+
+    write.csv(hk.norm_counts, 
+              file.path(paste0(results.folder, "hk_norm_counts.csv")), 
+              row.names = FALSE)
     
-    neg.normalization.output <- geomxNorm(
-                                  object = filtering.output$object, 
-                                  norm = "neg")
+    write.csv(neg.norm_counts, 
+              file.path(paste0(results.folder, "neg_norm_counts.csv")), 
+              row.names = FALSE)
     
-    print(neg.normalization.output$multi.plot)
-    print(neg.normalization.output$boxplot.raw)
-    print(neg.normalization.output$boxplot.norm)
+    write.csv(q3.norm_counts, 
+              file.path(paste0(results.folder, "q3_norm_counts.csv")), 
+              row.names = FALSE)
+    
+    
+  }
+  
+  
+  
 ```
 
 
 ## 5. Unsupervised Analysis:
 
 ```{r Unsupervised Analysis, echo=TRUE}
-
-    #Test Unsupervised Analysis:
-    unsupervised.output <- dimReduct(object = q3.normalization.output$object,
-                        point.size = 3,
-                        point.alpha = 1,
-                        color.variable1 = "region",
+    
+    library(gridExtra)
+  
+    ###
+    ## House Keeping Normalization
+    ###
+    # Generate PCA/TSNE/UMAP:
+    unsupervised.output <- dimReduct(object = norm.hk, 
+                        assay.data = "hk_norm", 
+                        point.size = 2.5,
+                        point.alpha = 0.7, 
+                        symbol.size = 1, 
+                        text.size = 8, 
+                        color.variable1 = "Age of mouse (old or young)",
                         shape.variable = "class"
     )
     
+    hk_norm_pca <- unsupervised.output$plot$PCA + ggtitle("Housekeeping")
     print(unsupervised.output$plot$PCA)
     print(unsupervised.output$plot$tSNE)
     print(unsupervised.output$plot$UMAP)
+    
+    ggsave(file.path(paste0(results.folder, "hk_norm_pca.png")), 
+           plot = unsupervised.output$plot$PCA, height = 12, width = 20)
+    ggsave(file.path(paste0(results.folder, "hk_norm_tsne.png")), 
+           plot = unsupervised.output$plot$tSNE, height = 12, width = 20)
+    ggsave(file.path(paste0(results.folder, "hk_norm_umap.png")), 
+           plot = unsupervised.output$plot$UMAP, height = 12, width = 20)
+    
+    ###
+    ## Negative Normalization
+    ###
+    # Generate PCA/TSNE/UMAP:
+    unsupervised.output <- dimReduct(object = norm.neg, 
+                        assay.data = "neg_norm", 
+                        point.size = 2.5,
+                        point.alpha = 0.7, 
+                        symbol.size = 1, 
+                        text.size = 8, 
+                        color.variable1 = "Age of mouse (old or young)",
+                        shape.variable = "class"
+    )
+    
+    neg_norm_pca <- unsupervised.output$plot$PCA + ggtitle("Negative")
+    print(unsupervised.output$plot$PCA)
+    print(unsupervised.output$plot$tSNE)
+    print(unsupervised.output$plot$UMAP)
+    
+    
+    ggsave(file.path(paste0(results.folder, "neg_norm_pca.png")), 
+           plot = unsupervised.output$plot$PCA, height = 12, width = 20)
+    ggsave(file.path(paste0(results.folder, "neg_norm_tsne.png")), 
+           plot = unsupervised.output$plot$tSNE, height = 12, width = 20)
+    ggsave(file.path(paste0(results.folder, "neg_norm_umap.png")), 
+           plot = unsupervised.output$plot$UMAP, height = 12, width = 20)
+    
+    ###
+    ## Q3 Normalization
+    ###
+    # Generate PCA/TSNE/UMAP:
+    unsupervised.output <- dimReduct(object = norm.q3, 
+                        assay.data = "q_norm", 
+                        point.size = 2.5,
+                        point.alpha = 0.7, 
+                        symbol.size = 1, 
+                        text.size = 8, 
+                        color.variable1 = "Age of mouse (old or young)",
+                        shape.variable = "class"
+    )
+    
+    q_norm_pca <- unsupervised.output$plot$PCA + ggtitle("Quartile 3")
+    print(unsupervised.output$plot$PCA)
+    print(unsupervised.output$plot$tSNE)
+    print(unsupervised.output$plot$UMAP)
+    
+    ggsave(file.path(paste0(results.folder, "q_norm_pca.png")), 
+           plot = unsupervised.output$plot$PCA, height = 12, width = 20)
+    ggsave(file.path(paste0(results.folder, "q_norm_tsne.png")), 
+           plot = unsupervised.output$plot$tSNE, height = 12, width = 20)
+    ggsave(file.path(paste0(results.folder, "q_norm_umap.png")), 
+           plot = unsupervised.output$plot$UMAP, height = 12, width = 20)
+    
+    
+  hk_norm_pca <- hk_norm_pca + theme(legend.position = "none")
+  neg_norm_pca <- neg_norm_pca + theme(legend.position = "none")
+  q_norm_pca <- q_norm_pca + theme(legend.position = "none")
+  # Assuming plot1, plot2, and plot3 are your individual plots
+  combined_pca <- grid.arrange(hk_norm_pca, neg_norm_pca, q_norm_pca, ncol = 3)
+
+  # Save the combined plot
+  ggsave(file.path(paste0(results.folder, "combined_pca.png")),
+         plot = combined_pca, 
+         height = 12, width = 40)
 
 ```
 
@@ -212,8 +564,70 @@ rect(xleft = 3.5, xright = CD27, ybottom = -6, ytop = 10, density = 2, col = "re
 
  
 ```{r Clustering high CV Genes, echo=TRUE}
+
+    library(pheatmap)
     
-    heatmap.output <- heatMap(object = unsupervised.output$object, 
+    # Transpose the counts files so genes are columns and rows are samples
+    hk_counts_transposed <- as.data.frame(t(hk.norm_counts))
+    
+    # Gather the annotation
+    annotation <- pData(hk.norm)
+    
+    
+    # Merge the counts and annotation
+    merge.df <- merge(annotation, hk_counts_transposed, 
+                      by.x = "row.names", by.y = "row.names")
+    
+    # log counts
+    Biobase::assayDataElement(object = hk.norm, elt = "log_q") <-
+    assayDataApply(hk.norm,
+                   2,
+                   FUN = log,
+                   base = 2,
+                   elt = "hk_norm")
+  
+  # create CV function
+  .calcCv <- function(x) {
+    sd(x) / mean(x)
+  }
+  cv.dat <- assayDataApply(hk.norm,
+                           elt = "log_q", MARGIN = 1, .calcCv)
+  
+  
+  # show the highest CD genes and their CV values
+  sort(cv.dat, decreasing = TRUE)[1:5]
+  
+  # Identify genes in the top 3rd of the CV values
+  goi <- names(cv.dat)[cv.dat > quantile(cv.dat, 0.8)]
+  
+  
+  # make gene list for plot
+  plot.genes <-
+    Biobase::assayDataElement(hk.norm, elt = "log_q")
+  
+  # Annotation column to use
+  anno.col <- 
+    as.data.frame(annotation$class)
+  
+  # make plot
+  p <- pheatmap(
+    plot.genes,
+    main = "Clustering high CV genes",
+    scale = "none",
+    show_rownames = TRUE,
+    show_colnames = TRUE,
+    border_color = NA,
+    clustering_method = "average",
+    cluster_rows = TRUE,
+    cluster_cols = TRUE,
+    clustering_distance_rows = "correlation",
+    clustering_distance_cols = "correlation",
+    breaks = seq(-3, 3, 0.05),
+    color = colorRampPalette(c("blue", "white", "red"))(120), 
+    annotation_col = anno.col
+  )
+
+    heatmap.output <- heatMap(object = hk.norm, 
                         ngenes = 200, 
                         scale.by.row.or.col = "row", 
                         show.rownames = FALSE, 
@@ -224,10 +638,10 @@ rect(xleft = 3.5, xright = CD27, ybottom = -6, ytop = 10, density = 2, col = "re
                         clustering.distance.rows = "correlation", 
                         clustering.distance.cols = "correlation", 
                         annotation.row = NA, 
-                        annotation.col = c("class", "segment", "region"), 
+                        annotation.col = c("class", "slide_name"), 
                         breaks.by.values = seq(-3, 3, 0.05), 
                         heatmap.color = colorRampPalette(c("blue", "white", "red"))(120), 
-                        norm.method = "quant")
+                        norm.method = "hk_norm")
 
 
     print(heatmap.output$plot)
