@@ -509,6 +509,7 @@ rownames(ki67.counts.df) <- NULL
 # Combine the counts with the annotation based on Sample ID
 ki67.barplot.df <- merge(cleaned.annotation.df, ki67.counts.df, by = "Sample_ID")
 
+# Convert counts from charcater to numeric
 ki67.barplot.df$`Ki_67` <- as.numeric(ki67.barplot.df$`Ki-67`)
 
 
@@ -540,7 +541,7 @@ final.ki67.boxplot <- grid.arrange(title, ki67.combined.boxplot, heights = c(0.1
 
 grid.draw(final.ki67.boxplot)
 
-export.boxplot <- TRUE
+export.boxplot <- FALSE
 
 if(export.boxplot == TRUE){
   ggsave(paste0(project.folder.path, "results/ki67_boxplot_age.png"), final.ki67.boxplot, width = 12, height = 10)
@@ -561,7 +562,7 @@ ki67.boxplot.animal <- ggplot(ki67.barplot.df, aes(x = animal_num, y = Ki_67)) +
 
 
 # Export the boxplot
-export.boxplot <- TRUE
+export.boxplot <- FALSE
 
 if(export.boxplot == TRUE){
   ggsave(paste0(project.folder.path, "results/ki67_boxplot_animal.png"), ki67.boxplot.animal, width = 12, height = 10)
@@ -619,7 +620,7 @@ final.cd45.boxplot <- grid.arrange(title, cd45.combined.boxplot, heights = c(0.1
 
 grid.draw(final.cd45.boxplot)
 
-export.boxplot <- TRUE
+export.boxplot <- FALSE
 
 if(export.boxplot == TRUE){
   ggsave(paste0(project.folder.path, "results/cd45_boxplot_age.png"), final.cd45.boxplot, width = 12, height = 10)
@@ -639,11 +640,98 @@ cd45.boxplot.animal <- ggplot(cd45.barplot.df, aes(x = animal_num, y = CD45)) +
 
 
 # Export the boxplot
-export.boxplot <- TRUE
+export.boxplot <- FALSE
 
 if(export.boxplot == TRUE){
   ggsave(paste0(project.folder.path, "results/cd45_boxplot_animal.png"), cd45.boxplot.animal, width = 12, height = 10)
 }
+
+
+# Boxplot for Nuclei count per ROI and Ki-67 expression
+
+ki67.barplot.df$`nuclei` <- as.numeric(ki67.barplot.df$`Nuclei count`)
+
+ki67.barplot.df$animal_roi <- paste0(ki67.barplot.df$`Animal #`, "_", ki67.barplot.df$roi)
+
+# Create a plot labeled for plotly
+ki67.nuclei.dot.plotly <- ggplot(ki67.barplot.df, 
+                               aes(x = nuclei, y = Ki_67, text = paste0("Animal_ROI: ", animal_roi))) +
+                          geom_point() +
+                          labs(x = "Nuclei Count", 
+                               y = "Ki-67 Expression", 
+                               title = "Nuclei Count by Ki-67 Expression")
+# Visualize the plotly plot
+ggplotly(ki67.nuclei.dot.plotly)
+
+# Create a plot without a trend line
+ki67.nuclei.dot.plot <- ggplot(ki67.barplot.df, 
+                               aes(x = nuclei, y = Ki_67)) +
+                          geom_point() +
+                          labs(x = "Nuclei Count", 
+                               y = "Ki-67 Expression", 
+                               title = "Nuclei Count by Ki-67 Expression")
+
+# Export the basic dot plot
+export.dotplot <- TRUE
+if(export.dotplot == TRUE){
+  ggsave(paste0(project.folder.path, "results/ki67_nuclei_dotplot.png"), ki67.nuclei.dot.plot, width = 9, height = 8)
+}
+
+# Create a plot with a trend line
+ki67.nuclei.dot.plot.trend <- ggplot(ki67.barplot.df, 
+                               aes(x = nuclei, y = Ki_67)) +
+                          geom_point() +
+                          geom_smooth(method = "lm", formula = y ~ x, se = TRUE) +
+                          labs(x = "Nuclei Count", 
+                               y = "Ki-67 Expression", 
+                               title = "Nuclei Count by Ki-67 Expression")
+
+# Check if there is a relationship between nuclei and CD45 expression
+cor.test(ki67.barplot.df$nuclei, ki67.barplot.df$Ki_67, method = "spearman")
+
+
+# Boxplot for Nuclei count per ROI and CD45 expression
+
+cd45.barplot.df$`nuclei` <- as.numeric(cd45.barplot.df$`Nuclei count`)
+
+cd45.barplot.df$animal_roi <- paste0(cd45.barplot.df$`Animal #`, "_", cd45.barplot.df$roi)
+
+# Create a plot labeled for plotly
+cd45.nuclei.dot.plotly <- ggplot(cd45.barplot.df, 
+                               aes(x = nuclei, y = CD45, text = paste0("Animal_ROI: ", animal_roi))) +
+                          geom_point() +
+                          labs(x = "Nuclei Count", 
+                               y = "CD45 Expression", 
+                               title = "Nuclei Count by CD45 Expression")
+# Visualize the plotly plot
+ggplotly(cd45.nuclei.dot.plot)
+
+# Create a plot with a trend line
+cd45.nuclei.dot.plot <- ggplot(cd45.barplot.df, 
+                               aes(x = nuclei, y = CD45)) +
+                          geom_point() + 
+                          labs(x = "Nuclei Count", 
+                               y = "CD45 Expression", 
+                               title = "Nuclei Count by CD45 Expression")
+
+# Export the basic dot plot
+export.dotplot <- TRUE
+if(export.dotplot == TRUE){
+  ggsave(paste0(project.folder.path, "results/cd45_nuclei_dotplot.png"), cd45.nuclei.dot.plot, width = 9, height = 8)
+}
+
+# Create a plot with a trend line
+cd45.nuclei.dot.plot.trend <- ggplot(cd45.barplot.df, 
+                               aes(x = nuclei, y = CD45)) +
+                          geom_point() +
+                          geom_smooth(method = "lm", formula = y ~ x, se = TRUE) +
+                          labs(x = "Nuclei Count", 
+                               y = "CD45 Expression", 
+                               title = "Nuclei Count by CD45 Expression")
+
+# Check if there is a relationship between nuclei and CD45 expression
+cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
+
 
 
 
