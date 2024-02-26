@@ -239,8 +239,10 @@ fig()
 # Save the feature plot
 feature.plot <- fig()
 
-# Save the plot as an image file (e.g., PNG, PDF, JPEG)
-ggsave(file.path(paste0(results.folder, "feature_plot.png")), plot = feature.plot)
+export.feature.plot <- FALSE
+if(export.feature.plot == TRUE){
+  ggsave(file.path(paste0(results.folder, "feature_plot.png")), plot = feature.plot, width = 12, height = 10)
+}
 
 # Generate a list of flagged segments
 
@@ -640,7 +642,7 @@ cd45.boxplot.animal <- ggplot(cd45.barplot.df, aes(x = animal_num, y = CD45)) +
 export.boxplot <- TRUE
 
 if(export.boxplot == TRUE){
-  ggsave(cd45.boxplot.animal, paste0(project.folder.path, "results/cd45_boxplot_animal.png"), width = 12, height = 10)
+  ggsave(paste0(project.folder.path, "results/cd45_boxplot_animal.png"), cd45.boxplot.animal, width = 12, height = 10)
 }
 
 
@@ -779,11 +781,83 @@ ggplot(data) +
 
     library(pheatmap)
     
-    # Transpose the counts files so genes are columns and rows are samples
-    hk_counts_transposed <- as.data.frame(t(hk.norm_counts))
+    # Prepare the normalized counts as a df
+    hk.norm.df <- as.data.frame(hk.norm_counts)
     
-    # Gather the annotation
-    annotation <- pData(hk.norm)
+    # Convert dcc columns to numeric
+    dcc.columns <- hk.norm.df[, -1]
+    dcc.columns <- apply(dcc.columns, 2, as.numeric)
+    hk.norm.df <- cbind(hk.norm.df[, 1, drop = FALSE], dcc.columns)
+    
+    # Convert to log counts
+    log.norm.df <- log2(hk.norm.df[, -1] + 1)
+    #log.norm.df <- cbind(hk.norm.df[, 1, drop = FALSE], log.norm.counts)
+    
+    # Set up the heatmap annotation with select columns
+    
+    # Columns to plot on heatmap
+    anno.columns <- c("age","treatment")
+    
+    # Set up the annotation df using the cleaned df with NTCs removed
+    cleaned.annotation.df <- as.data.frame(cleaned.annotation.df)
+    rownames(cleaned.annotation.df) <- cleaned.annotation.df$Sample_ID
+    
+    # Subset and order the annotation for the selected columns
+    # Arrange the annotations with the biggest group as the final arrange
+    heatmap.annotation <- cleaned.annotation.df[ ,anno.columns]
+    heatmap.annotation <- heatmap.annotation %>% 
+      arrange(treatment) %>% 
+      arrange(age)
+    
+    # Define the colors for the annotation
+    anno.colors = list(
+      age = c(young = "seagreen", 
+              old = "salmon2"), 
+      treatment = c(BLZ945 = "yellow", 
+                    'IP-549' = "orange", 
+                    control = "slategray")
+      )
+    
+
+    # Remove the .dcc from the sample IDs in the log counts df
+    colnames(log.norm.df) <- gsub("\\.dcc$", "", colnames(log.norm.df))
+    
+  
+    # Reorder the data columns to they match the annotation row order
+    
+    row.order <- rownames(heatmap.annotation)
+    log.norm.df <- log.norm.df[, row.order]
+    
+    # Make the heatmap
+    heatmap.all.proteins <- pheatmap(log.norm.df, 
+         main = "All Protein Signatures", 
+         show_rownames = TRUE, 
+         scale = "row",   
+         show_colnames = FALSE,
+         border_color = NA, 
+         cluster_rows = TRUE, 
+         cluster_cols = FALSE, 
+         clustering_method = "average", 
+         clustering_distance_rows = "correlation", 
+         clustering_distance_cols = "correlation", 
+         color = colorRampPalette(c("blue", "white", "red"))(120), 
+         annotation_row = NA, 
+         annotation_col = heatmap.annotation, 
+         annotation_colors = anno.colors
+         )
+    
+    # Export the heatmap
+    
+    export.heatmap <- TRUE
+    if(export.heatmap == TRUE){
+  
+    ggsave(paste0(project.folder.path, "results/heatmap_all_proteins.png"),
+         plot = heatmap.all.proteins, 
+         width = 12, 
+         height = 10, 
+         units = "in")
+  
+    }
     
     
     # Merge the counts and annotation
