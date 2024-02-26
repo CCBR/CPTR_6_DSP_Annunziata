@@ -7,6 +7,8 @@ date: "2024-02-13"
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+knitr::opts_knit$set(root.dir = '/rstudio-files/ccr-dceg-data/users/ned/DSPWorkflow')
+
 # Increase the time out for downloading the DSP package
 options(timeout = max(300, getOption("timeout")))
 ```
@@ -18,6 +20,8 @@ options(timeout = max(300, getOption("timeout")))
 #install.packages("devtools")
 
 library(devtools)
+
+load_all()
 
 #install_github("NIDAP-Community/DSPWorkflow", ref = "protein_panel")
 ```
@@ -42,6 +46,8 @@ library(devtools)
 #  untar(full.tar.path, exdir = downloads.path)
 #}
 
+library(readxl)
+
 project.folder.path <- "/rstudio-files/ccr-dceg-data/users/ned/CPTR/CPTR-6 Annunziata/CPTR_6_DSP_Annunziata/"
 
 dcc.files <- dir(
@@ -56,6 +62,8 @@ pkc.files <- c(paste0(project.folder.path, "Mm_P_NGS_Core_v1.0.pkc"),
                paste0(project.folder.path, "Mm_P_NGS_ImmuneCellTyping_v1.0.pkc"), 
                paste0(project.folder.path, "Mm_P_NGS_Myeloid_v1.0.pkc"))
 pheno.data.file <- paste0(project.folder.path, "CPTR6_Annunziata_annotation.xlsx")
+
+annotation.df <- read_excel("/rstudio-files/ccr-dceg-data/users/ned/CPTR/CPTR-6 Annunziata/CPTR_6_DSP_Annunziata/CPTR6_Annunziata_annotation.xlsx")
 ```
 
 # Run the first step of the DSP Workflow package
@@ -63,8 +71,6 @@ pheno.data.file <- paste0(project.folder.path, "CPTR6_Annunziata_annotation.xlsx
 # Study Design
 
 ```{r Study Design, echo=TRUE}
-
-#library(DSPWorkflow)
 
 # Save the output from the study design function into a list
 sdesign.list <- studyDesign(dcc.files = dcc.files, 
@@ -75,8 +81,8 @@ sdesign.list <- studyDesign(dcc.files = dcc.files,
                                 protocol.data.col.names = c("aoi", "roi"),
                                 experiment.data.col.names = c("panel"),
                                 slide.name.col = "slide name", 
-                                class.col = "Treatment (control, BLZ945, IP-549)", 
-                                region.col = "region", 
+                                class.col = "treatment", 
+                                region.col = "age", 
                                 segment.col = "segment",
                                 area.col = "area",
                                 nuclei.col = "nuclei", 
@@ -99,10 +105,10 @@ print(sdesign.list$sankey.plot)
 ```{r}
 
 object <- sdesign.list$object
-lane1 <- "Age of mouse (old or young)"
+lane1 <- "region"
 lane2 <- "class"
 lane3 <- "Animal #"
-lane4 <- "segment"
+lane4 <- "slide_name"
 fill_lane <- "class"
 
 
@@ -363,6 +369,16 @@ colnames(final.flagged.segment.df)[colnames(final.flagged.segment.df) == "Raw"] 
 
 print(final.flagged.segment.df)
 
+qc.folder <- paste0(project.folder.path, "qc/")
+
+export.qc.flag.summary <- FALSE
+
+if(export.qc.flag.summary == TRUE){
+  
+  write.csv(qc.df, file = paste0(qc.folder, "CPTR6_QC_flag_summary.csv"))
+  
+}
+
 ```
 
 ## 3. Filtering:
@@ -376,9 +392,9 @@ print(final.flagged.segment.df)
   lowSaturation <- which(as.data.frame(protocolData(qc.output)[["QCFlags"]])["LowSaturation"] == TRUE)
 
   # remove low quality ROIs and compare the before and after
-  passedQC <- qc.output[, -lowSaturation]
-  dim(qc.output)
-  dim(passedQC)
+  #passedQC <- qc.output[, -lowSaturation]
+  #dim(qc.output)
+  #dim(passedQC)
 
 ```
 
@@ -432,7 +448,7 @@ print(final.flagged.segment.df)
   
   # Export all count tables
   
-  export_counts <- TRUE
+  export_counts <- FALSE
   
   if(export_counts == TRUE){
     
@@ -458,6 +474,202 @@ print(final.flagged.segment.df)
   
   
 ```
+# Bar plots for proteins of interest
+
+```{r}
+
+library(ggplot2)
+library(scales)
+library(gridExtra)
+library(plotly)
+library(grid)
+
+# Remove the NTC rows from the annotation
+cleaned.annotation.df <- annotation.df[annotation.df$'slide name' != "No Template Control", ]
+
+
+# Boxplot for Ki-67
+
+# Set up the Ki-67 normalized counts
+
+# Grab the counts
+ki67.counts <- hk.norm_counts["Ki-67", , drop = FALSE]
+
+# Make the Sample ID as rows
+ki67.counts.df <- as.data.frame(t(ki67.counts))
+
+# Create a column for the Sample IDs and remove the .dcc
+ki67.counts.df$Sample_ID <- rownames(ki67.counts.df)
+ki67.counts.df$Sample_ID <- gsub("\\.dcc$", "", ki67.counts.df$Sample_ID)
+rownames(ki67.counts.df) <- NULL
+
+
+# Combine the counts with the annotation based on Sample ID
+ki67.barplot.df <- merge(cleaned.annotation.df, ki67.counts.df, by = "Sample_ID")
+
+ki67.barplot.df$`Ki_67` <- as.numeric(ki67.barplot.df$`Ki-67`)
+
+
+# Create the boxplots for the two age groups, then combine into a single image
+
+ki67.barplot.df.old <- ki67.barplot.df[ki67.barplot.df$age == "old", ]
+  
+ki67.barplot.df.young <- ki67.barplot.df[ki67.barplot.df$age == "young", ]
+
+ki67.boxplot.old <- ggplot(ki67.barplot.df.old, aes(x = treatment, y = Ki_67)) + 
+  geom_boxplot(notch = FALSE) + 
+  ggtitle("Old") + 
+  scale_y_continuous(labels = scales::comma) + 
+  ylim(0, 30000)
+
+ki67.bp.old.plotly <- plotly::ggplotly(ki67.boxplot.old)
+
+ki67.boxplot.young <- ggplot(ki67.barplot.df.young, aes(x = treatment, y = Ki_67)) + 
+  geom_boxplot(notch = FALSE) + 
+  ggtitle("Young") + 
+  scale_y_continuous(labels = scales::comma) + 
+  ylim(0, 30000)
+
+ki67.combined.boxplot <- grid.arrange(ki67.boxplot.young, ki67.boxplot.old, ncol = 2)
+
+title <- textGrob("Ki-67 signal by Age and Treatment", gp = gpar(fontsize = 20, fontface = "bold"))
+
+final.ki67.boxplot <- grid.arrange(title, ki67.combined.boxplot, heights = c(0.1, 0.9))
+
+grid.draw(final.ki67.boxplot)
+
+export.boxplot <- TRUE
+
+if(export.boxplot == TRUE){
+  ggsave(paste0(project.folder.path, "results/ki67_boxplot_age.png"), final.ki67.boxplot, width = 12, height = 10)
+}
+
+
+
+
+# Create the boxplot per animal number
+
+ki67.barplot.df$`animal_num` <- as.factor(ki67.barplot.df$`Animal #`)
+
+ki67.boxplot.animal <- ggplot(ki67.barplot.df, aes(x = animal_num, y = Ki_67)) + 
+  geom_boxplot(notch = FALSE) + 
+  ggtitle("Ki-67 expression per animal") + 
+  scale_y_continuous(labels = scales::comma) + 
+  ylim(0, 30000)
+
+
+# Export the boxplot
+export.boxplot <- TRUE
+
+if(export.boxplot == TRUE){
+  ggsave(paste0(project.folder.path, "results/ki67_boxplot_animal.png"), ki67.boxplot.animal, width = 12, height = 10)
+}
+
+
+
+
+# Make the boxplots for CD45
+
+# Set up the normalized counts
+
+# Grab the counts
+cd45.counts <- hk.norm_counts["CD45", , drop = FALSE]
+
+# Make the Sample ID as rows
+cd45.counts.df <- as.data.frame(t(cd45.counts))
+
+# Create a column for the Sample IDs and remove the .dcc
+cd45.counts.df$Sample_ID <- rownames(cd45.counts.df)
+cd45.counts.df$Sample_ID <- gsub("\\.dcc$", "", cd45.counts.df$Sample_ID)
+rownames(cd45.counts.df) <- NULL
+
+
+# Combine the counts with the annotation based on Sample ID
+cd45.barplot.df <- merge(cleaned.annotation.df, cd45.counts.df, by = "Sample_ID")
+
+cd45.barplot.df$`CD45` <- as.numeric(cd45.barplot.df$`CD45`)
+
+# Create the boxplots for the two age groups, then combine into a single image
+
+cd45.barplot.df.old <- cd45.barplot.df[cd45.barplot.df$age == "old", ]
+  
+cd45.barplot.df.young <- cd45.barplot.df[cd45.barplot.df$age == "young", ]
+
+cd45.boxplot.old <- ggplot(cd45.barplot.df.old, aes(x = treatment, y = CD45)) + 
+  geom_boxplot(notch = FALSE) + 
+  ggtitle("Old") + 
+  scale_y_continuous(labels = scales::comma) + 
+  ylim(0, 30000)
+
+cd45.bp.old.plotly <- plotly::ggplotly(cd45.boxplot.old)
+
+cd45.boxplot.young <- ggplot(cd45.barplot.df.young, aes(x = treatment, y = CD45)) + 
+  geom_boxplot(notch = FALSE) + 
+  ggtitle("Young") + 
+  scale_y_continuous(labels = scales::comma) + 
+  ylim(0, 30000)
+
+cd45.combined.boxplot <- grid.arrange(cd45.boxplot.young, cd45.boxplot.old, ncol = 2)
+
+title <- textGrob("CD45 signal by Age and Treatment", gp = gpar(fontsize = 20, fontface = "bold"))
+
+final.cd45.boxplot <- grid.arrange(title, cd45.combined.boxplot, heights = c(0.1, 0.9))
+
+grid.draw(final.cd45.boxplot)
+
+export.boxplot <- TRUE
+
+if(export.boxplot == TRUE){
+  ggsave(paste0(project.folder.path, "results/cd45_boxplot_age.png"), final.cd45.boxplot, width = 12, height = 10)
+}
+
+
+
+# Create the boxplot per animal number
+
+cd45.barplot.df$`animal_num` <- as.factor(cd45.barplot.df$`Animal #`)
+
+cd45.boxplot.animal <- ggplot(cd45.barplot.df, aes(x = animal_num, y = CD45)) + 
+  geom_boxplot(notch = FALSE) + 
+  ggtitle("CD45 expression per animal") + 
+  scale_y_continuous(labels = scales::comma) + 
+  ylim(0, 30000)
+
+
+# Export the boxplot
+export.boxplot <- TRUE
+
+if(export.boxplot == TRUE){
+  ggsave(cd45.boxplot.animal, paste0(project.folder.path, "results/cd45_boxplot_animal.png"), width = 12, height = 10)
+}
+
+
+
+
+```
+
+``` {r}
+# Bar plots
+
+# Create the bar plot
+ki67.boxplot <- ggplot(ki67.barplot.df, aes(x = treatment, y = Ki_67)) +
+  geom_boxplot(stat = "identity", 
+               outlier.colour="black", 
+               outlier.shape=16, 
+               outlier.size=2, 
+               notch=FALSE) +
+  labs(x = "age", y = "Counts", title = "Counts of Ki-67") +
+  scale_y_continuous(labels = scales::comma)
+
+ki67.boxplot <- ggplot(ki67.barplot.df, aes(x = treatment, y = Ki_67)) + 
+  geom_bar()
+  geom_errorbar()
+  
+ggplot(data) +
+    geom_bar( aes(x=name, y=value), stat="identity", fill="skyblue", alpha=0.7) +
+    geom_errorbar( aes(x=name, ymin=value-sd, ymax=value+sd), width=0.4, colour="orange", alpha=0.9, size=1.3)
+
+```
 
 
 ## 5. Unsupervised Analysis:
@@ -476,7 +688,7 @@ print(final.flagged.segment.df)
                         point.alpha = 0.7, 
                         symbol.size = 1, 
                         text.size = 8, 
-                        color.variable1 = "Age of mouse (old or young)",
+                        color.variable1 = "age",
                         shape.variable = "class"
     )
     
