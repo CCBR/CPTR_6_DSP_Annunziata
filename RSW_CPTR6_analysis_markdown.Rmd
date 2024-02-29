@@ -404,13 +404,40 @@ if(export.qc.flag.summary == TRUE){
 ## 4. Normalization:
   
 ```{r Normalization, echo=TRUE}
+
+  # Check for best normalization type
   
-  plotConcordance(object = qc.output, targetList = igg.names, plotFactor = "class")
+  norm.factors <- computeNormalizationFactors(qc.output, 
+                                              igg.names = igg.names, 
+                                              hk.names = hk.names, 
+                                              area = "area", 
+                                              nuclei = "Nuclei count")
+  
+  igg.concordance.treatment <- plotConcordance(object = qc.output, 
+                                     targetList = igg.names, 
+                                     plotFactor = "class")
+  
+  igg.concordance.age <- plotConcordance(object = qc.output, 
+                                     targetList = igg.names, 
+                                     plotFactor = "region")
+  
+  
+  
+  hk.concordance.treatment <- plotConcordance(object = qc.output, 
+                                    targetList = hk.names, 
+                                    plotFactor = "class")
+  
+  hk.concordance.age <- plotConcordance(object = qc.output, 
+                                    targetList = hk.names, 
+                                    plotFactor = "region")
+  
+  
 
-  normfactors <- computeNormalizationFactors(object = qc.output)
-
-  plotNormFactorConcordance(object = qc.output, plotFactor = "class",
-                          normfactors = normfactors)
+  norm.factor.concordance.treatment <- plotNormFactorConcordance(object = qc.output, plotFactor = "class",
+                          normfactors = norm.factors)
+  
+  norm.factor.concordance.age <- plotNormFactorConcordance(object = qc.output, plotFactor = "class",
+                          normfactors = norm.factors)
   
   norm.hk <- normalize(qc.output, norm_method="hk", toElt = "hk_norm")
   
@@ -419,7 +446,9 @@ if(export.qc.flag.summary == TRUE){
   norm.q3 <- normalize(qc.output, norm_method="quant", desiredQuantile = .75, toElt = "q_norm")
   
   
-  fig <- qcProteinSignal(object = norm.hk, neg.names = igg.names)
+  probe.signal.hk <- qcProteinSignal(object = norm.hk, neg.names = hk.names)
+  
+  probe.signal.neg <- qcProteinSignal(object = norm.hk, neg.names = igg.names)
 
   proteinOrder <- qcProteinSignalNames(object = norm.hk, neg.names = igg.names)
 
@@ -742,22 +771,22 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
 # Bar plots
 
 # Create the bar plot
-ki67.boxplot <- ggplot(ki67.barplot.df, aes(x = treatment, y = Ki_67)) +
-  geom_boxplot(stat = "identity", 
-               outlier.colour="black", 
-               outlier.shape=16, 
-               outlier.size=2, 
-               notch=FALSE) +
-  labs(x = "age", y = "Counts", title = "Counts of Ki-67") +
-  scale_y_continuous(labels = scales::comma)
+#ki67.boxplot <- ggplot(ki67.barplot.df, aes(x = treatment, y = Ki_67)) +
+#  geom_boxplot(stat = "identity", 
+#               outlier.colour="black", 
+#               outlier.shape=16, 
+#               outlier.size=2, 
+#               notch=FALSE) +
+#  labs(x = "age", y = "Counts", title = "Counts of Ki-67") +
+#  scale_y_continuous(labels = scales::comma)
 
-ki67.boxplot <- ggplot(ki67.barplot.df, aes(x = treatment, y = Ki_67)) + 
-  geom_bar()
-  geom_errorbar()
+#ki67.boxplot <- ggplot(ki67.barplot.df, aes(x = treatment, y = Ki_67)) + 
+#  geom_bar()
+#  geom_errorbar()
   
-ggplot(data) +
-    geom_bar( aes(x=name, y=value), stat="identity", fill="skyblue", alpha=0.7) +
-    geom_errorbar( aes(x=name, ymin=value-sd, ymax=value+sd), width=0.4, colour="orange", alpha=0.9, size=1.3)
+#ggplot(data) +
+#    geom_bar( aes(x=name, y=value), stat="identity", fill="skyblue", alpha=0.7) +
+#    geom_errorbar( aes(x=name, ymin=value-sd, ymax=value+sd), width=0.4, colour="orange", alpha=0.9, #size=1.3)
 
 ```
 
