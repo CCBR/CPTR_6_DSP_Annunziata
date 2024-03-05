@@ -417,9 +417,15 @@ if(export.qc.flag.summary == TRUE){
                                      targetList = igg.names, 
                                      plotFactor = "class")
   
+  ggsave(paste0(qc.folder, "concordance.negative.treatment.png"),
+         igg.concordance.treatment)
+  
   igg.concordance.age <- plotConcordance(object = qc.output, 
                                      targetList = igg.names, 
                                      plotFactor = "region")
+  
+  ggsave(paste0(qc.folder, "concordance.negative.age.png"),
+         igg.concordance.age)
   
   
   
@@ -427,9 +433,15 @@ if(export.qc.flag.summary == TRUE){
                                     targetList = hk.names, 
                                     plotFactor = "class")
   
+  ggsave(paste0(qc.folder, "concordance.hk.treatment.png"),
+         hk.concordance.treatment)
+  
   hk.concordance.age <- plotConcordance(object = qc.output, 
                                     targetList = hk.names, 
                                     plotFactor = "region")
+  
+  ggsave(paste0(qc.folder, "concordance.hk.age.png"),
+         hk.concordance.age)
   
   
 
@@ -505,7 +517,7 @@ if(export.qc.flag.summary == TRUE){
   
   
 ```
-# Bar plots for proteins of interest
+# Box plots for proteins of interest
 
 ```{r}
 
@@ -517,6 +529,74 @@ library(grid)
 
 # Remove the NTC rows from the annotation
 cleaned.annotation.df <- annotation.df[annotation.df$'slide name' != "No Template Control", ]
+
+# Boxplot for Protein targets
+
+# Gather all targets
+feature.list = rownames(hk.norm_counts)
+
+# Set up the normalized counts
+
+for(feature in feature.list){
+  
+  # Grab the counts
+  feature.counts <- hk.norm_counts[feature, , drop = FALSE]
+  
+  # Make the Sample ID as rows
+  feature.counts.df <- as.data.frame(t(feature.counts))
+  
+  # Create a column for the Sample IDs and remove the .dcc
+  feature.counts.df$Sample_ID <- rownames(feature.counts.df)
+  feature.counts.df$Sample_ID <- gsub("\\.dcc$", "", feature.counts.df$Sample_ID)
+  rownames(feature.counts.df) <- NULL
+  
+  
+  # Combine the counts with the annotation based on Sample ID
+  feature.barplot.df <- merge(cleaned.annotation.df, feature.counts.df, by = "Sample_ID")
+  
+  # Convert counts from characater to numeric
+  feature.barplot.df[[feature]] <- as.numeric(feature.barplot.df[[feature]])
+  
+  
+  # Create the boxplots for the two age groups, then combine into a single image
+  
+  feature.barplot.df.old <- feature.barplot.df[feature.barplot.df$age == "old", ]
+    
+  feature.barplot.df.young <- feature.barplot.df[feature.barplot.df$age == "young", ]
+  
+  y.scale.max <- max(feature.barplot.df[[feature]]) + 1000
+  
+  feature.boxplot.old <- ggplot(feature.barplot.df.old, aes(x = treatment, y = !!sym(feature))) + 
+    geom_boxplot(notch = FALSE) + 
+    ggtitle("Old") + 
+    scale_y_continuous(labels = scales::comma) + 
+    ylim(0, y.scale.max)
+  
+  feature.boxplot.young <- ggplot(feature.barplot.df.young, aes(x = treatment, y = !!sym(feature))) + 
+    geom_boxplot(notch = FALSE) + 
+    ggtitle("Young") + 
+    scale_y_continuous(labels = scales::comma) + 
+    ylim(0, y.scale.max)
+  
+  feature.combined.boxplot <- grid.arrange(feature.boxplot.young, feature.boxplot.old, ncol = 2)
+  
+  title <- textGrob(paste0(feature,  "signal by Age and Treatment"), gp = gpar(fontsize = 20, fontface = "bold"))
+  
+  final.feature.boxplot <- grid.arrange(title, feature.combined.boxplot, heights = c(0.1, 0.9))
+  
+  # Replace bad characters
+  if(grepl("/", feature)){
+    feature <- gsub("/", "_", feature)
+  }
+  
+  export.boxplot <- TRUE
+  
+  if(export.boxplot == TRUE){
+    ggsave(paste0(project.folder.path, "results/", feature, "_boxplot_age.png"), final.feature.boxplot, width = 12, height = 10)
+  }
+  
+}
+
 
 
 # Boxplot for Ki-67
@@ -807,7 +887,7 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
                         point.alpha = 0.7, 
                         symbol.size = 1, 
                         text.size = 8, 
-                        color.variable1 = "age",
+                        color.variable1 = "region",
                         shape.variable = "class"
     )
     
@@ -833,7 +913,7 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
                         point.alpha = 0.7, 
                         symbol.size = 1, 
                         text.size = 8, 
-                        color.variable1 = "Age of mouse (old or young)",
+                        color.variable1 = "region",
                         shape.variable = "class"
     )
     
@@ -860,7 +940,7 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
                         point.alpha = 0.7, 
                         symbol.size = 1, 
                         text.size = 8, 
-                        color.variable1 = "Age of mouse (old or young)",
+                        color.variable1 = "region",
                         shape.variable = "class"
     )
     
@@ -976,6 +1056,38 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
   
     }
     
+    # Make heatmap with column clustering
+    
+    heatmap.all.proteins.clust <- pheatmap(log.norm.df, 
+         main = "All Protein Signatures", 
+         show_rownames = TRUE, 
+         scale = "row",   
+         show_colnames = FALSE,
+         border_color = NA, 
+         cluster_rows = TRUE, 
+         cluster_cols = TRUE, 
+         clustering_method = "average", 
+         clustering_distance_rows = "correlation", 
+         clustering_distance_cols = "correlation", 
+         color = colorRampPalette(c("blue", "white", "red"))(120), 
+         annotation_row = NA, 
+         annotation_col = heatmap.annotation, 
+         annotation_colors = anno.colors
+         )
+    
+    # Export the heatmap
+    
+    export.heatmap <- TRUE
+    if(export.heatmap == TRUE){
+  
+    ggsave(paste0(project.folder.path, "results/heatmap_all_proteins_clust.png"),
+         plot = heatmap.all.proteins.clust, 
+         width = 12, 
+         height = 10, 
+         units = "in")
+  
+    }
+    
     
     # Merge the counts and annotation
     merge.df <- merge(annotation, hk_counts_transposed, 
@@ -1056,6 +1168,251 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
 
 
 ```{r Differential Expression Analysis,  echo=TRUE}
+
+
+library(stats)
+library(dplyr)
+library(tidyr)
+
+
+
+
+
+
+# Make the Sample ID as rows
+counts.transposed <- as.data.frame(t(hk.norm_counts))
+
+# Create a column for the Sample IDs and remove the .dcc
+counts.transposed$Sample_ID <- rownames(counts.transposed)
+counts.transposed$Sample_ID <- gsub("\\.dcc$", "", counts.transposed$Sample_ID)
+rownames(counts.transposed) <- NULL
+
+
+# Combine the counts with the annotation based on Sample ID
+diff.eq.df <- merge(cleaned.annotation.df, counts.transposed, by = "Sample_ID")
+
+
+# Old BLZ945
+
+subset.diff.eq <- subset(diff.eq.df, age == "old" & treatment %in% c("BLZ945", "control"))
+
+subset.diff.eq$treatment <- as.factor(subset.diff.eq$treatment)
+
+anova_results <- sapply(colnames(subset.diff.eq)[-(1:23)], function(gene) {
+  fit <- lm(get(gene) ~ treatment, data = subset.diff.eq)
+  summary_fit <- summary(fit)
+  p_value <- summary_fit$coefficients[2, 4]
+  log_fc <- summary_fit$coefficients[2, 1]
+  c(p_value, log_fc)
+})
+
+valid_genes <- complete.cases(anova_results)
+
+# Extract p-values and log-fold changes for valid genes
+p_values <- anova_results[1, valid_genes]
+log_fold_changes <- anova_results[2, valid_genes]
+
+# Extract gene IDs for valid genes
+gene_ids <- names(anova_results)[valid_genes]
+
+# Create results data frame for valid genes
+old.blz945.results_df <- data.frame(
+  p_value = p_values,
+  log_fold_change = log_fold_changes
+)
+
+old.blz945.results_df$gene <- rownames(old.blz945.results_df)
+rownames(old.blz945.results_df) <- NULL
+
+# Adjust p-values for multiple testing
+old.blz945.results_df$adjusted_p_value <- p.adjust(old.blz945.results_df$p_value, method = "fdr")
+
+# Print first few rows of results
+print(head(old.blz945.results_df))
+
+write.csv(old.blz945.results_df, file.path(paste0(results.folder, "DE_Old_BLZ945.csv")), 
+              row.names = FALSE)
+
+
+
+# Old IP549
+
+subset.diff.eq <- subset(diff.eq.df, age == "old" & treatment %in% c("IP-549", "control"))
+
+subset.diff.eq$treatment <- as.factor(subset.diff.eq$treatment)
+
+anova_results <- sapply(colnames(subset.diff.eq)[-(1:23)], function(gene) {
+  fit <- lm(get(gene) ~ treatment, data = subset.diff.eq)
+  summary_fit <- summary(fit)
+  p_value <- summary_fit$coefficients[2, 4]
+  log_fc <- summary_fit$coefficients[2, 1]
+  c(p_value, log_fc)
+})
+
+valid_genes <- complete.cases(anova_results)
+
+# Extract p-values and log-fold changes for valid genes
+p_values <- anova_results[1, valid_genes]
+log_fold_changes <- anova_results[2, valid_genes]
+
+# Extract gene IDs for valid genes
+gene_ids <- names(anova_results)[valid_genes]
+
+# Create results data frame for valid genes
+old.ip549.results_df <- data.frame(
+  p_value = p_values,
+  log_fold_change = log_fold_changes
+)
+
+old.ip549.results_df$gene <- rownames(old.ip549.results_df)
+rownames(old.ip549.results_df) <- NULL
+
+# Adjust p-values for multiple testing
+old.ip549.results_df$adjusted_p_value <- p.adjust(old.ip549.results_df$p_value, method = "fdr")
+
+# Print first few rows of results
+print(head(old.ip549.results_df))
+
+write.csv(old.ip549.results_df, file.path(paste0(results.folder, "DE_Old_IP549.csv")), 
+              row.names = FALSE)
+
+
+# Young BLZ945
+
+subset.diff.eq <- subset(diff.eq.df, age == "young" & treatment %in% c("BLZ945", "control"))
+
+subset.diff.eq$treatment <- as.factor(subset.diff.eq$treatment)
+
+anova_results <- sapply(colnames(subset.diff.eq)[-(1:23)], function(gene) {
+  fit <- lm(get(gene) ~ treatment, data = subset.diff.eq)
+  summary_fit <- summary(fit)
+  p_value <- summary_fit$coefficients[2, 4]
+  log_fc <- summary_fit$coefficients[2, 1]
+  c(p_value, log_fc)
+})
+
+valid_genes <- complete.cases(anova_results)
+
+# Extract p-values and log-fold changes for valid genes
+p_values <- anova_results[1, valid_genes]
+log_fold_changes <- anova_results[2, valid_genes]
+
+# Extract gene IDs for valid genes
+gene_ids <- names(anova_results)[valid_genes]
+
+# Create results data frame for valid genes
+young.blz945.results_df <- data.frame(
+  p_value = p_values,
+  log_fold_change = log_fold_changes
+)
+
+young.blz945.results_df$gene <- rownames(young.blz945.results_df)
+rownames(young.blz945.results_df) <- NULL
+
+# Adjust p-values for multiple testing
+young.blz945.results_df$adjusted_p_value <- p.adjust(young.blz945.results_df$p_value, method = "fdr")
+
+# Print first few rows of results
+print(head(young.blz945.results_df))
+
+write.csv(young.blz945.results_df, file.path(paste0(results.folder, "DE_Young_BLZ945.csv")), 
+              row.names = FALSE)
+
+
+# Young IP549
+
+subset.diff.eq <- subset(diff.eq.df, age == "young" & treatment %in% c("IP-549", "control"))
+
+subset.diff.eq$treatment <- as.factor(subset.diff.eq$treatment)
+
+anova_results <- sapply(colnames(subset.diff.eq)[-(1:23)], function(gene) {
+  fit <- lm(get(gene) ~ treatment, data = subset.diff.eq)
+  summary_fit <- summary(fit)
+  p_value <- summary_fit$coefficients[2, 4]
+  log_fc <- summary_fit$coefficients[2, 1]
+  c(p_value, log_fc)
+})
+
+valid_genes <- complete.cases(anova_results)
+
+# Extract p-values and log-fold changes for valid genes
+p_values <- anova_results[1, valid_genes]
+log_fold_changes <- anova_results[2, valid_genes]
+
+# Extract gene IDs for valid genes
+gene_ids <- names(anova_results)[valid_genes]
+
+# Create results data frame for valid genes
+young.ip549.results_df <- data.frame(
+  p_value = p_values,
+  log_fold_change = log_fold_changes
+)
+
+young.ip549.results_df$gene <- rownames(young.ip549.results_df)
+rownames(young.ip549.results_df) <- NULL
+
+# Adjust p-values for multiple testing
+young.ip549.results_df$adjusted_p_value <- p.adjust(young.ip549.results_df$p_value, method = "fdr")
+
+# Print first few rows of results
+print(head(young.ip549.results_df))
+
+write.csv(young.ip549.results_df, file.path(paste0(results.folder, "DE_Young_IP549.csv")), 
+              row.names = FALSE)
+
+```
+
+
+
+```{r}
+modelFormula = ~ class + (1 + class | slide)
+
+model.formula <- "~ treatment"
+
+pData(norm.hk)$treatment <- factor(pData(norm.hk)$class, c("control", "IP549", "BLZ945"))
+
+pData(norm.hk)[["slide"]] <- factor(pData(norm.hk)[["slide_name"]])
+
+assayDataElement(object = norm.hk, elt = "hk_norm") <-
+    assayDataApply(norm.hk, 2, FUN = log, base = 2, elt = "hk_norm")
+
+# run LMM:
+# formula follows conventions defined by the lme4 package
+results <- c()
+for(age in c("young", "old")) {
+    ind <- pData(norm.hk)$region == age
+    mixedOutmc <-
+        mixedModelDE(norm.hk[, ind],
+                     elt = "hk_norm",
+                     modelFormula = ~ treatment + (1 + treatment | 'Animal #'),
+                     groupVar = "treatment",
+                     nCores = parallel::detectCores(),
+                     multiCore = FALSE)
+    
+    # format results as data.frame
+    r_test <- do.call(rbind, mixedOutmc["lsmeans", ])
+    tests <- rownames(r_test)
+    r_test <- as.data.frame(r_test)
+    r_test$Contrast <- tests
+    
+    # use lapply in case you have multiple levels of your test factor to
+    # correctly associate gene name with it's row in the results table
+    r_test$Gene <- 
+        unlist(lapply(colnames(mixedOutmc),
+                      rep, nrow(mixedOutmc["lsmeans", ][[1]])))
+    r_test$Subset <- status
+    r_test$FDR <- p.adjust(r_test$`Pr(>|t|)`, method = "fdr")
+    r_test <- r_test[, c("Gene", "Subset", "Contrast", "Estimate", 
+                         "Pr(>|t|)", "FDR")]
+    results <- rbind(results, r_test)
+}
+
+```
+
+
+
+```{r}
+
 
     goi <- c("CD274", "CD8A", "CD68", "EPCAM",
              "KRT18", "NPHS1", "NPHS2", "CALB1", "CLDN8")
