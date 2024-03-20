@@ -13,20 +13,7 @@ knitr::opts_knit$set(root.dir = '/rstudio-files/ccr-dceg-data/users/ned/DSPWorkf
 options(timeout = max(300, getOption("timeout")))
 ```
 
-## Install DSP Workflow from github
-
-```{r}
-
-#install.packages("devtools")
-
-library(devtools)
-
-load_all()
-
-#install_github("NIDAP-Community/DSPWorkflow", ref = "protein_panel")
-```
-
-## Load the test data
+## Load the Input Data
 
 ``` {r Load Data, echo=TRUE}
 # Create a folder to hold the test data. 
@@ -61,55 +48,79 @@ pkc.files <- c(paste0(project.folder.path, "Mm_P_NGS_Core_v1.0.pkc"),
                paste0(project.folder.path, "Mm_P_NGS_ImmuneActivation_v1.0.pkc"), 
                paste0(project.folder.path, "Mm_P_NGS_ImmuneCellTyping_v1.0.pkc"), 
                paste0(project.folder.path, "Mm_P_NGS_Myeloid_v1.0.pkc"))
-pheno.data.file <- paste0(project.folder.path, "CPTR6_Annunziata_annotation.xlsx")
+annotation.file.path <- paste0(project.folder.path, "CPTR6_Annunziata_annotation.xlsx")
 
 annotation.df <- read_excel("/rstudio-files/ccr-dceg-data/users/ned/CPTR/CPTR-6 Annunziata/CPTR_6_DSP_Annunziata/CPTR6_Annunziata_annotation.xlsx")
 ```
 
-# Run the first step of the DSP Workflow package
-
-# Study Design
+# Set up the GeoMx Set object
 
 ```{r Study Design, echo=TRUE}
 
-# Save the output from the study design function into a list
-sdesign.list <- studyDesign(dcc.files = dcc.files, 
-                                pkc.files = pkc.files,
-                                pheno.data.file = pheno.data.file,
-                                pheno.data.sheet = "Annotation template",
-                                pheno.data.dcc.col.name = "Sample_ID",
-                                protocol.data.col.names = c("aoi", "roi"),
-                                experiment.data.col.names = c("panel"),
-                                slide.name.col = "slide name", 
-                                class.col = "treatment", 
-                                region.col = "age", 
-                                segment.col = "segment",
-                                area.col = "area",
-                                nuclei.col = "nuclei", 
-                                sankey.exclude.slide = FALSE, 
-                                segment.id.length = 4, 
-                                analyte.type = "protein")
+library(GeomxTools)
 
-# The output of the study design function is a Geomxset Object and a Plot
+# Establish the names of important annotation columns
+
+slide.name.col <-  "slide name"
+group.col <-  "age" 
+subgroup.col <- "treatment"
+segment.col <- "segment"
+area.col <- "area"
+nuclei.col <- "nuclei"
+
+# Load all of the input DCC files, annotation, and PKC files
+object <-
+      readNanoStringGeoMxSet(
+        dccFiles = dcc.files,
+        pkcFiles = pkc.files,
+        phenoDataFile = annotation.file.path,
+        phenoDataSheet = "Annotation template",
+        phenoDataDccColName = "Sample_ID",
+        protocolDataColNames = c("aoi", "roi"),
+        experimentDataColNames = c("panel"), 
+        analyte = "protein")
+
+
 # Print out a summary of the object
+print(object)
 
-print(sdesign.list$object)
+# Rename all of the required columns based on user parameters in data
+colnames(object@phenoData@data)[colnames(object@phenoData@data) == slide.name.col] = "slide_name"
 
-# Print out the Sankey Plot
+# Rename all of the required columns based on user parameters in metadata
+rownames(object@phenoData@varMetadata)[rownames(object@phenoData@varMetadata) == slide.name.col] = "slide_name"
 
-print(sdesign.list$sankey.plot)
+
+# Establish the segment specific IDs
+segment.id.length <- 4
+pData(object)$segmentID <- paste0(substr(pData(object)[[group.col]], 1, segment.id.length),
+                                  "|",
+                                  substr(pData(object)[[subgroup.col]], 1, segment.id.length),
+                                  "|",
+                                  substr(pData(object)$segment, 1, segment.id.length),
+                                  "|", 
+                                  substr(pData(object)$slide_name, 1, segment.id.length), 
+                                  "|", 
+                                  sData(object)$roi)
+
+
+
+
 ```
 
-# Custom Sankey
+# Sankey Plot
 
 ```{r}
 
-object <- sdesign.list$object
-lane1 <- "region"
-lane2 <- "class"
-lane3 <- "Animal #"
+library(ggplot2)
+library(ggforce)
+
+# Define the lanes of the Sankey plot
+lane1 <- "treatment"
+lane2 <- "age"
+lane3 <- "segment"
 lane4 <- "slide_name"
-fill_lane <- "class"
+fill_lane <- "treatment"
 
 
 #Establish variables for the Sankey plot
@@ -207,7 +218,7 @@ library(dplyr)
 results.folder <- "/rstudio-files/ccr-dceg-data/users/ned/CPTR/CPTR-6 Annunziata/CPTR_6_DSP_Annunziata/results/"
 
 # Set the QC flags using the Nanostring defaults
-qc.output <-  setSegmentQCFlags(sdesign.list$object, 
+qc.output <-  setSegmentQCFlags(object, 
                                 qcCutoffs = list(
                                   minSegmenReads = 1000, 
                                   percentAligned = 80, 
@@ -413,56 +424,43 @@ if(export.qc.flag.summary == TRUE){
                                               area = "area", 
                                               nuclei = "Nuclei count")
   
+  # Concordance plots for Negative Controls
   igg.concordance.treatment <- plotConcordance(object = qc.output, 
                                      targetList = igg.names, 
-                                     plotFactor = "class")
-  
-  ggsave(paste0(qc.folder, "concordance.negative.treatment.png"),
-         igg.concordance.treatment)
+                                     plotFactor = "age")
   
   igg.concordance.age <- plotConcordance(object = qc.output, 
                                      targetList = igg.names, 
-                                     plotFactor = "region")
+                                     plotFactor = "treatment")
   
-  ggsave(paste0(qc.folder, "concordance.negative.age.png"),
-         igg.concordance.age)
+  print(igg.concordance.treatment)
+  print(igg.concordance.age)
   
-  
-  
+  # Concordance plots for Housekeeping controls
   hk.concordance.treatment <- plotConcordance(object = qc.output, 
                                     targetList = hk.names, 
-                                    plotFactor = "class")
-  
-  ggsave(paste0(qc.folder, "concordance.hk.treatment.png"),
-         hk.concordance.treatment)
+                                    plotFactor = "age")
   
   hk.concordance.age <- plotConcordance(object = qc.output, 
                                     targetList = hk.names, 
-                                    plotFactor = "region")
+                                    plotFactor = "treatment")
   
-  ggsave(paste0(qc.folder, "concordance.hk.age.png"),
-         hk.concordance.age)
+  print(hk.concordance.treatment)
+  print(hk.concordance.age)
   
-  
-
-  norm.factor.concordance.treatment <- plotNormFactorConcordance(object = qc.output, plotFactor = "class",
-                          normfactors = norm.factors)
-  
-  norm.factor.concordance.age <- plotNormFactorConcordance(object = qc.output, plotFactor = "class",
-                          normfactors = norm.factors)
-  
+  # Generate normalized counts for each normalization type
   norm.hk <- normalize(qc.output, norm_method="hk", toElt = "hk_norm")
   
   norm.neg <- normalize(qc.output, norm_method="neg", toElt = "neg_norm")
   
   norm.q3 <- normalize(qc.output, norm_method="quant", desiredQuantile = .75, toElt = "q_norm")
   
+  # Generate probe figure for negative normalized counts
+  probe.signal.hk <- qcProteinSignal(object = norm.neg, neg.names = hk.names)
   
-  probe.signal.hk <- qcProteinSignal(object = norm.hk, neg.names = hk.names)
-  
-  probe.signal.neg <- qcProteinSignal(object = norm.hk, neg.names = igg.names)
+  probe.signal.neg <- qcProteinSignal(object = norm.neg, neg.names = igg.names)
 
-  proteinOrder <- qcProteinSignalNames(object = norm.hk, neg.names = igg.names)
+  proteinOrder <- qcProteinSignalNames(object = norm.neg, neg.names = igg.names)
 
   fig()
   
@@ -473,21 +471,29 @@ if(export.qc.flag.summary == TRUE){
   raw_counts <- as.data.frame(norm.hk@assayData$exprs)
   feature_list <- rownames(raw_counts)
   raw_counts <- cbind("feature" = feature_list, raw_counts)
+  # log counts
+  raw_log_counts <- raw_counts %>% mutate(across(starts_with("DSP"),~log2(. + 1)))
   
   ## Housekeeping Normalization
   hk.norm_counts <- norm.hk@assayData$hk_norm
   feature_list <- rownames(hk.norm_counts)
   hk.norm_counts <- cbind("feature" = feature_list, hk.norm_counts)
+  # log counts
+  hk_log_counts <- as.data.frame(hk.norm_counts) %>% mutate(across(starts_with("DSP"),~ceiling(as.numeric(.x)))) %>% mutate(across(starts_with("DSP"),~log2(. + 1)))
   
   ## Negative Normalization
   neg.norm_counts <- norm.neg@assayData$neg_norm
   feature_list <- rownames(neg.norm_counts)
   neg.norm_counts <- cbind("feature" = feature_list, neg.norm_counts)
+  # log counts
+  neg_log_counts <- as.data.frame(neg.norm_counts) %>% mutate(across(starts_with("DSP"),~ceiling(as.numeric(.x)))) %>% mutate(across(starts_with("DSP"),~log2(. + 1)))
   
   ## Q3 Normalization
   q3.norm_counts <- norm.q3@assayData$q_norm
   feature_list <- rownames(q3.norm_counts)
   q3.norm_counts <- cbind("feature" = feature_list, q3.norm_counts)
+  # log counts
+  q3_log_counts <- as.data.frame(q3.norm_counts) %>% mutate(across(starts_with("DSP"),~ceiling(as.numeric(.x)))) %>% mutate(across(starts_with("DSP"),~log2(. + 1)))
   
   # Export all count tables
   
@@ -517,148 +523,235 @@ if(export.qc.flag.summary == TRUE){
   
   
 ```
-# Box plots for proteins of interest
+
+
+# QC Plots for Marker Features Ki-67 and CD45
 
 ```{r}
 
-library(ggplot2)
-library(scales)
-library(gridExtra)
-library(plotly)
-library(grid)
+# Set up the counts df for the marker features 
 
-# Remove the NTC rows from the annotation
-cleaned.annotation.df <- annotation.df[annotation.df$'slide name' != "No Template Control", ]
+library(dplyr)
 
-# Boxplot for Protein targets
+# Marker features of interest
+marker.features <- c("Ki-67", "CD45")
 
-# Gather all targets
-feature.list = rownames(hk.norm_counts)
-
-# Set up the normalized counts
-
-for(feature in feature.list){
-  
-  # Grab the counts
-  feature.counts <- hk.norm_counts[feature, , drop = FALSE]
-  
-  # Make the Sample ID as rows
-  feature.counts.df <- as.data.frame(t(feature.counts))
-  
-  # Create a column for the Sample IDs and remove the .dcc
-  feature.counts.df$Sample_ID <- rownames(feature.counts.df)
-  feature.counts.df$Sample_ID <- gsub("\\.dcc$", "", feature.counts.df$Sample_ID)
-  rownames(feature.counts.df) <- NULL
-  
-  
-  # Combine the counts with the annotation based on Sample ID
-  feature.barplot.df <- merge(cleaned.annotation.df, feature.counts.df, by = "Sample_ID")
-  
-  # Convert counts from characater to numeric
-  feature.barplot.df[[feature]] <- as.numeric(feature.barplot.df[[feature]])
-  
-  
-  # Create the boxplots for the two age groups, then combine into a single image
-  
-  feature.barplot.df.old <- feature.barplot.df[feature.barplot.df$age == "old", ]
-    
-  feature.barplot.df.young <- feature.barplot.df[feature.barplot.df$age == "young", ]
-  
-  y.scale.max <- max(feature.barplot.df[[feature]]) + 1000
-  
-  feature.boxplot.old <- ggplot(feature.barplot.df.old, aes(x = treatment, y = !!sym(feature))) + 
-    geom_boxplot(notch = FALSE) + 
-    ggtitle("Old") + 
-    scale_y_continuous(labels = scales::comma) + 
-    ylim(0, y.scale.max)
-  
-  feature.boxplot.young <- ggplot(feature.barplot.df.young, aes(x = treatment, y = !!sym(feature))) + 
-    geom_boxplot(notch = FALSE) + 
-    ggtitle("Young") + 
-    scale_y_continuous(labels = scales::comma) + 
-    ylim(0, y.scale.max)
-  
-  feature.combined.boxplot <- grid.arrange(feature.boxplot.young, feature.boxplot.old, ncol = 2)
-  
-  title <- textGrob(paste0(feature,  "signal by Age and Treatment"), gp = gpar(fontsize = 20, fontface = "bold"))
-  
-  final.feature.boxplot <- grid.arrange(title, feature.combined.boxplot, heights = c(0.1, 0.9))
-  
-  # Replace bad characters
-  if(grepl("/", feature)){
-    feature <- gsub("/", "_", feature)
-  }
-  
-  export.boxplot <- TRUE
-  
-  if(export.boxplot == TRUE){
-    ggsave(paste0(project.folder.path, "results/", feature, "_boxplot_age.png"), final.feature.boxplot, width = 12, height = 10)
-  }
-  
-}
-
-
-
-# Boxplot for Ki-67
-
-# Set up the Ki-67 normalized counts
-
-# Grab the counts
-ki67.counts <- hk.norm_counts["Ki-67", , drop = FALSE]
+# Grab the normalized counts for both
+marker.counts <- as.data.frame(neg_log_counts) %>% 
+  filter(feature %in% marker.features)
 
 # Make the Sample ID as rows
-ki67.counts.df <- as.data.frame(t(ki67.counts))
+marker.counts.df <- as.data.frame((t(marker.counts)))
 
 # Create a column for the Sample IDs and remove the .dcc
-ki67.counts.df$Sample_ID <- rownames(ki67.counts.df)
-ki67.counts.df$Sample_ID <- gsub("\\.dcc$", "", ki67.counts.df$Sample_ID)
-rownames(ki67.counts.df) <- NULL
+marker.counts.df$Sample_ID <- rownames(marker.counts.df)
 
+# Remove the file extension .dcc
+marker.counts.df$Sample_ID <- gsub("\\.dcc$", "", marker.counts.df$Sample_ID)
+rownames(marker.counts.df) <- NULL
 
 # Combine the counts with the annotation based on Sample ID
-ki67.barplot.df <- merge(cleaned.annotation.df, ki67.counts.df, by = "Sample_ID")
+marker.boxplot.df <- merge(cleaned.annotation.df, marker.counts.df, by = "Sample_ID")
 
-# Convert counts from charcater to numeric
-ki67.barplot.df$`Ki_67` <- as.numeric(ki67.barplot.df$`Ki-67`)
+```
 
+### Marker expression per Animal 
 
-# Create the boxplots for the two age groups, then combine into a single image
+```{r}
 
-ki67.barplot.df.old <- ki67.barplot.df[ki67.barplot.df$age == "old", ]
+# Create QC boxplots for all marker features
+
+# Organize annotation
+marker.boxplot.df$animal_num <- as.factor(marker.boxplot.df$'Animal #')
+
+# For each marker make a boxplot
+for(marker in marker.features){
   
-ki67.barplot.df.young <- ki67.barplot.df[ki67.barplot.df$age == "young", ]
-
-ki67.boxplot.old <- ggplot(ki67.barplot.df.old, aes(x = treatment, y = Ki_67)) + 
+  # Convert counts from character to numeric
+  marker.boxplot.df[[marker]] <- as.numeric(marker.boxplot.df[[marker]])
+  
+  # Set the upper and lower y limits of the plot (log2 counts)
+  y.upper.limit <- max(marker.boxplot.df[[marker]]) + 0.5
+  y.lower.limit <- min(marker.boxplot.df[[marker]]) - 0.5
+    
+  # Create a boxplot for for expression per animal #
+  animal.number.marker.boxplot <- ggplot(marker.boxplot.df, aes(x = animal_num, y = !!sym(marker), color = age)) + 
   geom_boxplot(notch = FALSE) + 
-  ggtitle("Old") + 
+  ggtitle(paste0(marker, " expression per animal")) +
   scale_y_continuous(labels = scales::comma) + 
-  ylim(0, 30000)
+  ylim(y.lower.limit, y.upper.limit) + 
+    labs(x = "Animal #", y = paste0(marker, " log2 counts"))
+  
+  
+  # Export the marker expression by animal number boxplot
+  export.boxplot <- TRUE
 
-ki67.bp.old.plotly <- plotly::ggplotly(ki67.boxplot.old)
-
-ki67.boxplot.young <- ggplot(ki67.barplot.df.young, aes(x = treatment, y = Ki_67)) + 
-  geom_boxplot(notch = FALSE) + 
-  ggtitle("Young") + 
-  scale_y_continuous(labels = scales::comma) + 
-  ylim(0, 30000)
-
-ki67.combined.boxplot <- grid.arrange(ki67.boxplot.young, ki67.boxplot.old, ncol = 2)
-
-title <- textGrob("Ki-67 signal by Age and Treatment", gp = gpar(fontsize = 20, fontface = "bold"))
-
-final.ki67.boxplot <- grid.arrange(title, ki67.combined.boxplot, heights = c(0.1, 0.9))
-
-grid.draw(final.ki67.boxplot)
-
-export.boxplot <- FALSE
-
-if(export.boxplot == TRUE){
-  ggsave(paste0(project.folder.path, "results/ki67_boxplot_age.png"), final.ki67.boxplot, width = 12, height = 10)
+  if(export.boxplot == TRUE){
+    
+    ggsave(paste0(project.folder.path, "qc/marker_qc_plots/", marker, "_boxplot_animal.png"), animal.number.marker.boxplot, width = 12, height = 10)
+    
+  }
+  
 }
 
 
+```
+### Marker expression per ROI
+
+```{r}
+library(Polychrome)
+# Reference for Polychrome:
+# https://cran.r-project.org/web/packages/Polychrome/vignettes/creatingPalettes.html
+
+# Add annotation for individual ROIs
+marker.boxplot.df$animal_roi <- paste0(marker.boxplot.df$`Animal #`, "_", marker.boxplot.df$roi)
+
+# For each marker make a boxplot
+for(marker in marker.features){
+  
+  # Convert counts from character to numeric
+  marker.boxplot.df[[marker]] <- as.numeric(marker.boxplot.df[[marker]])
+  
+  # Set the upper and lower y limits of the plot (log2 counts)
+  y.upper.limit <- max(marker.boxplot.df[[marker]]) + 0.5
+  y.lower.limit <- min(marker.boxplot.df[[marker]]) - 0.5
+
+  # Separate by age
+  for(age.type in unique(marker.barplot.df$age)){
+    
+    # Subset the marker data by age
+    marker.boxplot.df.age <- marker.boxplot.df %>%filter(age == age.type)
+    
+    # Create colors for each animal to distinguish the ROIs
+    animal.numbers <- unique(marker.boxplot.df.age$animal_num)
+    animal.num.colors <- unname(createPalette(length(animal.numbers), 
+                                            c("#ff0000", "#00ff00", "#0000ff"), 
+                                            M = 1000, 
+                                            range = c(10,70)))
+    
+    # Create the new boxplot by age
+    roi.marker.boxplot <- ggplot(marker.boxplot.df.age, 
+                                 aes(x = animal_roi, 
+                                     y = !!sym(marker), 
+                                     color = animal_num)) + 
+    geom_boxplot(notch = FALSE) + 
+    ggtitle(paste0(marker, " expression per roi in ", age.type)) +
+    scale_y_continuous(labels = scales::comma) + 
+    ylim(y.lower.limit, y.upper.limit) + 
+    labs(x = "Animal#_ROI", y = paste0(marker, " log2 counts")) + 
+    theme(axis.text.x = element_text(size = 8, angle = 90)) + 
+    facet_wrap(.~treatment, scales = "free_x") + 
+    scale_color_manual(values=animal.num.colors)
+      
+    # Export the boxplot named by age
+      export.age.boxplot <- TRUE
+
+    if(export.age.boxplot == TRUE){
+      ggsave(paste0(project.folder.path, "qc/marker_qc_plots/", marker, "_boxplot_roi_", age.type, ".png"), roi.marker.boxplot, width = 12, height = 10)
+    }
+  
+  }
+    
+  # Create a boxplot for for expression per animal #
+  roi.combined.marker.boxplot <- ggplot(marker.boxplot.df, aes(x = animal_roi, y = !!sym(marker), color = treatment)) + 
+  geom_boxplot(notch = FALSE) + 
+  ggtitle(paste0(marker, " expression per roi")) +
+  scale_y_continuous(labels = scales::comma) + 
+  ylim(y.lower.limit, y.upper.limit) + 
+  labs(x = "Animal #", y = paste0(marker, " log2 counts")) + 
+  theme(axis.text.x = element_text(size = 5, angle = 90)) + 
+  facet_wrap(.~age, scales = "free_x")
+  
+  
+  # Export the marker expression by animal number boxplot
+  export.combined.boxplot <- TRUE
+
+  if(export.combined.boxplot == TRUE){
+    
+    ggsave(paste0(project.folder.path, "qc/marker_qc_plots/", marker, "_boxplot_roi_combined.png"), roi.combined.marker.boxplot, width = 12, height = 10)
+    
+  }
+  
+}
+
+```
+
+# QC plots for Nuclei Count
+
+### Nuclei count per ROI
+
+```{r}
+
+# Convert nuclei counts from to a numeric column with no spaces
+marker.boxplot.df$`nuclei` <- as.numeric(marker.boxplot.df$`Nuclei count`)
+
+# Set the upper and lower y limits of the plot (log2 counts)
+y.upper.limit <- max(marker.boxplot.df$`nuclei`) + 10
+y.lower.limit <- min(marker.boxplot.df$`nuclei`) - 10
+# Separate by age
+for(age.type in unique(marker.boxplot.df$age)){
+  
+  # Subset the marker data by age
+  marker.boxplot.df.age <- marker.boxplot.df %>% filter(age == age.type)
+  
+  # Subset the marker data by age
+  marker.boxplot.df.age <- marker.boxplot.df %>%filter(age == age.type)
+  
+  # Create colors for each animal to distinguish the ROIs
+  # Reference for Polychrome:
+  # https://cran.r-project.org/web/packages/Polychrome/vignettes/creatingPalettes.html
+  animal.numbers <- unique(marker.boxplot.df.age$animal_num)
+  animal.num.colors <- unname(createPalette(length(animal.numbers), 
+                                            c("#ff0000", "#00ff00", "#0000ff"), 
+                                            M = 1000, 
+                                            range = c(10,70)))
+  
+  
+  
+  # Create the new boxplot by age
+  roi.nuclei.boxplot <- ggplot(marker.boxplot.df.age, aes(x = animal_roi, y = nuclei, color = animal_num)) + 
+  geom_boxplot(notch = FALSE) + 
+  ggtitle(paste0("Nuclei count per roi in ", age.type)) +
+  scale_y_continuous(labels = scales::comma) + 
+  ylim(y.lower.limit, y.upper.limit) + 
+  labs(x = "Animal#_ROI", y = "Nuclei count") + 
+  theme(axis.text.x = element_text(size = 8, angle = 90)) + 
+  facet_wrap(.~treatment, scales = "free_x") + 
+  scale_color_manual(values = animal.num.colors)
+    
+  # Export the boxplot named by age
+    export.age.boxplot <- TRUE
+  if(export.age.boxplot == TRUE){
+    ggsave(paste0(project.folder.path, "qc/marker_qc_plots/", marker, "boxplot_roi_", age.type, ".png"), roi.marker.boxplot, width = 12, height = 1)
+  }
+
+}
+  
+# Create a boxplot for for expression per animal #
+roi.combined.marker.boxplot <- ggplot(marker.boxplot.df, aes(x = animal_roi, y= !!sym(marker), color = treatment)) + 
+geom_boxplot(notch = FALSE) + 
+ggtitle(paste0(marker, " expression per roi")) +
+scale_y_continuous(labels = scales::comma) + 
+ylim(y.lower.limit, y.upper.limit) + 
+labs(x = "Animal #", y = paste0(marker, " log2 counts")) + 
+theme(axis.text.x = element_text(size = 5, angle = 90)) + 
+facet_wrap(.~age, scales = "free_x")
 
 
+# Export the marker expression by animal number boxplot
+export.combined.boxplot <- TRUE
+if(export.combined.boxplot == TRUE){
+  
+  ggsave(paste0(project.folder.path, "qc/marker_qc_plots/", marker, "boxplot_roi_combined.png"), roi.combined.marker.boxplot, width = 12, height = 1)
+  
+}
+  
+
+
+```
+
+
+```{r}
 # Create the boxplot per animal number
 
 ki67.barplot.df$`animal_num` <- as.factor(ki67.barplot.df$`Animal #`)
@@ -678,7 +771,11 @@ if(export.boxplot == TRUE){
 }
 
 
+```
 
+# Additional box/bar plots for CD45
+
+```{r}
 
 # Make the boxplots for CD45
 
@@ -703,37 +800,37 @@ cd45.barplot.df$`CD45` <- as.numeric(cd45.barplot.df$`CD45`)
 
 # Create the boxplots for the two age groups, then combine into a single image
 
-cd45.barplot.df.old <- cd45.barplot.df[cd45.barplot.df$age == "old", ]
+#cd45.barplot.df.old <- cd45.barplot.df[cd45.barplot.df$age == "old", ]
   
-cd45.barplot.df.young <- cd45.barplot.df[cd45.barplot.df$age == "young", ]
+#cd45.barplot.df.young <- cd45.barplot.df[cd45.barplot.df$age == "young", ]
 
-cd45.boxplot.old <- ggplot(cd45.barplot.df.old, aes(x = treatment, y = CD45)) + 
-  geom_boxplot(notch = FALSE) + 
-  ggtitle("Old") + 
-  scale_y_continuous(labels = scales::comma) + 
-  ylim(0, 30000)
+#cd45.boxplot.old <- ggplot(cd45.barplot.df.old, aes(x = treatment, y = CD45)) + 
+#  geom_boxplot(notch = FALSE) + 
+#  ggtitle("Old") + 
+#  scale_y_continuous(labels = scales::comma) + 
+#  ylim(0, 30000)
 
-cd45.bp.old.plotly <- plotly::ggplotly(cd45.boxplot.old)
+#cd45.bp.old.plotly <- plotly::ggplotly(cd45.boxplot.old)
 
-cd45.boxplot.young <- ggplot(cd45.barplot.df.young, aes(x = treatment, y = CD45)) + 
-  geom_boxplot(notch = FALSE) + 
-  ggtitle("Young") + 
-  scale_y_continuous(labels = scales::comma) + 
-  ylim(0, 30000)
+#cd45.boxplot.young <- ggplot(cd45.barplot.df.young, aes(x = treatment, y = CD45)) + 
+#  geom_boxplot(notch = FALSE) + 
+#  ggtitle("Young") + 
+#  scale_y_continuous(labels = scales::comma) + 
+#  ylim(0, 30000)
 
-cd45.combined.boxplot <- grid.arrange(cd45.boxplot.young, cd45.boxplot.old, ncol = 2)
+#cd45.combined.boxplot <- grid.arrange(cd45.boxplot.young, cd45.boxplot.old, ncol = 2)
 
-title <- textGrob("CD45 signal by Age and Treatment", gp = gpar(fontsize = 20, fontface = "bold"))
+#title <- textGrob("CD45 signal by Age and Treatment", gp = gpar(fontsize = 20, fontface = "bold"))
 
-final.cd45.boxplot <- grid.arrange(title, cd45.combined.boxplot, heights = c(0.1, 0.9))
+#final.cd45.boxplot <- grid.arrange(title, cd45.combined.boxplot, heights = c(0.1, 0.9))
 
-grid.draw(final.cd45.boxplot)
+#grid.draw(final.cd45.boxplot)
 
-export.boxplot <- FALSE
+#export.boxplot <- FALSE
 
-if(export.boxplot == TRUE){
-  ggsave(paste0(project.folder.path, "results/cd45_boxplot_age.png"), final.cd45.boxplot, width = 12, height = 10)
-}
+#if(export.boxplot == TRUE){
+#  ggsave(paste0(project.folder.path, "results/cd45_boxplot_age.png"), final.cd45.boxplot, width = 12, height = 10)
+#}
 
 
 
@@ -754,6 +851,8 @@ export.boxplot <- FALSE
 if(export.boxplot == TRUE){
   ggsave(paste0(project.folder.path, "results/cd45_boxplot_animal.png"), cd45.boxplot.animal, width = 12, height = 10)
 }
+
+
 
 
 # Boxplot for Nuclei count per ROI and Ki-67 expression
@@ -781,7 +880,7 @@ ki67.nuclei.dot.plot <- ggplot(ki67.barplot.df,
                                title = "Nuclei Count by Ki-67 Expression")
 
 # Export the basic dot plot
-export.dotplot <- TRUE
+export.dotplot <- FALSE
 if(export.dotplot == TRUE){
   ggsave(paste0(project.folder.path, "results/ki67_nuclei_dotplot.png"), ki67.nuclei.dot.plot, width = 9, height = 8)
 }
@@ -797,6 +896,26 @@ ki67.nuclei.dot.plot.trend <- ggplot(ki67.barplot.df,
 
 # Check if there is a relationship between nuclei and CD45 expression
 cor.test(ki67.barplot.df$nuclei, ki67.barplot.df$Ki_67, method = "spearman")
+
+
+
+# Create the plot of expression per ROI
+
+ki67.boxplot.animal.roi <- ggplot(ki67.barplot.df, aes(x = animal_roi, y = Ki_67)) + 
+  geom_boxplot(notch = FALSE) + 
+  ggtitle("Ki-67 expression per animal") + 
+  scale_y_continuous(labels = scales::comma) + 
+  ylim(0, 30000)
+
+
+# Export the boxplot
+export.boxplot <- FALSE
+
+if(export.boxplot == TRUE){
+  ggsave(paste0(project.folder.path, "results/ki67_boxplot_animal.png"), ki67.boxplot.animal, width = 12, height = 10)
+}
+
+
 
 
 # Boxplot for Nuclei count per ROI and CD45 expression
@@ -824,7 +943,7 @@ cd45.nuclei.dot.plot <- ggplot(cd45.barplot.df,
                                title = "Nuclei Count by CD45 Expression")
 
 # Export the basic dot plot
-export.dotplot <- TRUE
+export.dotplot <- FALSE
 if(export.dotplot == TRUE){
   ggsave(paste0(project.folder.path, "results/cd45_nuclei_dotplot.png"), cd45.nuclei.dot.plot, width = 9, height = 8)
 }
@@ -843,6 +962,54 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
 
 
 
+
+# Create the boxplot per ROI
+
+cd45.barplot.df$`animal_num` <- as.factor(cd45.barplot.df$`Animal #`)
+
+cd45.boxplot.animal <- ggplot(cd45.barplot.df, aes(x = animal_num, y = CD45)) + 
+  geom_boxplot(notch = FALSE) + 
+  ggtitle("CD45 expression per animal") + 
+  scale_y_continuous(labels = scales::comma) + 
+  ylim(0, 30000)
+
+
+# Export the boxplot
+export.boxplot <- FALSE
+
+if(export.boxplot == TRUE){
+  ggsave(paste0(project.folder.path, "results/cd45_boxplot_animal.png"), cd45.boxplot.animal, width = 12, height = 10)
+}
+
+
+
+
+
+
+# Create bar plot for nuclei count per ROI
+
+# Boxplot for Nuclei count per ROI and Ki-67 expression
+
+ki67.barplot.df$`nuclei` <- as.numeric(ki67.barplot.df$`Nuclei count`)
+
+# Create a plot labeled for plotly
+nuclei.roi.bar.plot <- ggplot(ki67.barplot.df, 
+                               aes(x = animal_roi, y = nuclei, fill = animal_num)) +
+                          geom_bar(stat = "identity") +
+                          labs(x = "ROI", 
+                               y = "Nuclei Count", 
+                               title = "Nuclei Count by ROI Expression") + 
+                          theme(axis.text.x = element_text(size = 6))
+
+nuclei.roi.bar.plot <- ggplot(ki67.barplot.df, 
+                               aes(x = animal_roi, y = nuclei)) +
+                          geom_bar(stat = "identity") +
+                          labs(x = "ROI", 
+                               y = "Nuclei Count", 
+                               title = "Nuclei Count by ROI Expression") + 
+                          theme(axis.text.x = element_text(size = 6))
+# Visualize the plotly plot
+ggplotly(nuclei.roi.bar.plot)
 
 
 ```
@@ -906,15 +1073,14 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
     ###
     ## Negative Normalization
     ###
-    # Generate PCA/TSNE/UMAP:
+    # Generate PCA/TSNE/UMAP for treatment:
     unsupervised.output <- dimReduct(object = norm.neg, 
                         assay.data = "neg_norm", 
                         point.size = 2.5,
                         point.alpha = 0.7, 
                         symbol.size = 1, 
                         text.size = 8, 
-                        color.variable1 = "region",
-                        shape.variable = "class"
+                        color.variable1 = "class"
     )
     
     neg_norm_pca <- unsupervised.output$plot$PCA + ggtitle("Negative")
@@ -923,25 +1089,49 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
     print(unsupervised.output$plot$UMAP)
     
     
-    ggsave(file.path(paste0(results.folder, "neg_norm_pca.png")), 
-           plot = unsupervised.output$plot$PCA, height = 12, width = 20)
-    ggsave(file.path(paste0(results.folder, "neg_norm_tsne.png")), 
-           plot = unsupervised.output$plot$tSNE, height = 12, width = 20)
-    ggsave(file.path(paste0(results.folder, "neg_norm_umap.png")), 
-           plot = unsupervised.output$plot$UMAP, height = 12, width = 20)
+    ggsave(file.path(paste0(results.folder, "PCA/neg_norm_treatment_pca.png")), 
+           plot = unsupervised.output$plot$PCA, height = 6, width = 10)
+    ggsave(file.path(paste0(results.folder, "PCA/neg_norm_treatment_tsne.png")), 
+           plot = unsupervised.output$plot$tSNE, height = 6, width = 10)
+    ggsave(file.path(paste0(results.folder, "PCA/neg_norm_treatment_umap.png")), 
+           plot = unsupervised.output$plot$UMAP, height = 6, width = 10)
+    
+    # Generate PCA/TSNE/UMAP for age:
+    unsupervised.output <- dimReduct(object = norm.neg, 
+                        assay.data = "neg_norm", 
+                        point.size = 2.5,
+                        point.alpha = 0.7, 
+                        symbol.size = 1, 
+                        text.size = 8, 
+                        color.variable1 = "region"
+    )
+    
+    neg_norm_pca <- unsupervised.output$plot$PCA + ggtitle("Negative")
+    print(unsupervised.output$plot$PCA)
+    print(unsupervised.output$plot$tSNE)
+    print(unsupervised.output$plot$UMAP)
+    
+    
+    ggsave(file.path(paste0(results.folder, "PCA/neg_norm_age_pca.png")), 
+           plot = unsupervised.output$plot$PCA, height = 6, width = 10)
+    ggsave(file.path(paste0(results.folder, "PCA/neg_norm_age_tsne.png")), 
+           plot = unsupervised.output$plot$tSNE, height = 6, width = 10)
+    ggsave(file.path(paste0(results.folder, "PCA/neg_norm_age_umap.png")), 
+           plot = unsupervised.output$plot$UMAP, height = 6, width = 10)
     
     ###
     ## Q3 Normalization
     ###
     # Generate PCA/TSNE/UMAP:
+    
+    # Generate for treatment
     unsupervised.output <- dimReduct(object = norm.q3, 
                         assay.data = "q_norm", 
                         point.size = 2.5,
                         point.alpha = 0.7, 
                         symbol.size = 1, 
                         text.size = 8, 
-                        color.variable1 = "region",
-                        shape.variable = "class"
+                        color.variable1 = "class"
     )
     
     q_norm_pca <- unsupervised.output$plot$PCA + ggtitle("Quartile 3")
@@ -949,12 +1139,36 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
     print(unsupervised.output$plot$tSNE)
     print(unsupervised.output$plot$UMAP)
     
-    ggsave(file.path(paste0(results.folder, "q_norm_pca.png")), 
-           plot = unsupervised.output$plot$PCA, height = 12, width = 20)
-    ggsave(file.path(paste0(results.folder, "q_norm_tsne.png")), 
-           plot = unsupervised.output$plot$tSNE, height = 12, width = 20)
-    ggsave(file.path(paste0(results.folder, "q_norm_umap.png")), 
-           plot = unsupervised.output$plot$UMAP, height = 12, width = 20)
+    ggsave(file.path(paste0(results.folder, "PCA/q3_norm_treatment_pca.png")), 
+           plot = unsupervised.output$plot$PCA, height = 6, width = 10)
+    ggsave(file.path(paste0(results.folder, "PCA/q3_norm_treatment_tsne.png")), 
+           plot = unsupervised.output$plot$tSNE, height = 6, width = 10)
+    ggsave(file.path(paste0(results.folder, "PCA/q3_norm_treatment_umap.png")), 
+           plot = unsupervised.output$plot$UMAP, height = 6, width = 10)
+    
+    
+    # Generate for age 
+    
+    unsupervised.output <- dimReduct(object = norm.q3, 
+                        assay.data = "q_norm", 
+                        point.size = 2.5,
+                        point.alpha = 0.7, 
+                        symbol.size = 1, 
+                        text.size = 8, 
+                        color.variable1 = "region"
+    )
+    
+    q_norm_pca <- unsupervised.output$plot$PCA + ggtitle("Quartile 3")
+    print(unsupervised.output$plot$PCA)
+    print(unsupervised.output$plot$tSNE)
+    print(unsupervised.output$plot$UMAP)
+    
+    ggsave(file.path(paste0(results.folder, "PCA/q3_norm_age_pca.png")), 
+           plot = unsupervised.output$plot$PCA, height = 6, width = 10)
+    ggsave(file.path(paste0(results.folder, "PCA/q3_norm_age_tsne.png")), 
+           plot = unsupervised.output$plot$tSNE, height = 6, width = 10)
+    ggsave(file.path(paste0(results.folder, "PCA/q3_norm_age_umap.png")), 
+           plot = unsupervised.output$plot$UMAP, height = 6, width = 10)
     
     
   hk_norm_pca <- hk_norm_pca + theme(legend.position = "none")
@@ -970,6 +1184,62 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
 
 ```
 
+# Unsupervised subset for age groups
+
+```{r}
+
+
+# Neg normalization
+
+# young group
+
+neg_young_geomxset_object <- norm.neg[, pData(norm.neg)$region == "young"]
+
+unsupervised.output <- dimReduct(object = neg_young_geomxset_object, 
+                        assay.data = "neg_norm", 
+                        point.size = 2.5,
+                        point.alpha = 0.7, 
+                        symbol.size = 1, 
+                        text.size = 8, 
+                        color.variable1 = "class"
+    )
+
+ggsave(file.path(paste0(results.folder, "PCA/neg_norm_treatment_pca_young.png")), 
+      plot = unsupervised.output$plot$PCA, height = 6, width = 10)
+
+# old group
+
+neg_old_geomxset_object <- norm.neg[, pData(norm.neg)$region == "old"]
+
+unsupervised.output <- dimReduct(object = neg_old_geomxset_object, 
+                        assay.data = "neg_norm", 
+                        point.size = 2.5,
+                        point.alpha = 0.7, 
+                        symbol.size = 1, 
+                        text.size = 8, 
+                        color.variable1 = "class"
+    )
+
+ggsave(file.path(paste0(results.folder, "PCA/neg_norm_treatment_pca_old.png")), 
+      plot = unsupervised.output$plot$PCA, height = 6, width = 10)
+
+# Q3 normalization
+
+q3_old_geomxset_object <- norm.q3[, pData(norm.q3)$region == "young"]
+
+unsupervised.output <- dimReduct(object = q3_old_geomxset_object, 
+                        assay.data = "q_norm", 
+                        point.size = 2.5,
+                        point.alpha = 0.7, 
+                        symbol.size = 1, 
+                        text.size = 8, 
+                        color.variable1 = "class"
+    )
+
+ggsave(file.path(paste0(results.folder, "PCA/q3_norm_treatment_pca_young.png")), 
+      plot = unsupervised.output$plot$PCA, height = 6, width = 10)
+
+```
 
 ## 6. Clustering high CV Genes and Heatmap:
 
@@ -979,15 +1249,15 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
     library(pheatmap)
     
     # Prepare the normalized counts as a df
-    hk.norm.df <- as.data.frame(hk.norm_counts)
+    neg.norm.df <- as.data.frame(neg.norm_counts)
     
     # Convert dcc columns to numeric
-    dcc.columns <- hk.norm.df[, -1]
+    dcc.columns <- neg.norm.df[, -1]
     dcc.columns <- apply(dcc.columns, 2, as.numeric)
-    hk.norm.df <- cbind(hk.norm.df[, 1, drop = FALSE], dcc.columns)
+    neg.norm.df <- cbind(neg.norm.df[, 1, drop = FALSE], dcc.columns)
     
     # Convert to log counts
-    log.norm.df <- log2(hk.norm.df[, -1] + 1)
+    log.norm.df <- log2(neg.norm.df[, -1] + 1)
     #log.norm.df <- cbind(hk.norm.df[, 1, drop = FALSE], log.norm.counts)
     
     # Set up the heatmap annotation with select columns
@@ -1088,84 +1358,38 @@ cor.test(cd45.barplot.df$nuclei, cd45.barplot.df$CD45, method = "spearman")
   
     }
     
-    
-    # Merge the counts and annotation
-    merge.df <- merge(annotation, hk_counts_transposed, 
-                      by.x = "row.names", by.y = "row.names")
-    
-    # log counts
-    Biobase::assayDataElement(object = hk.norm, elt = "log_q") <-
-    assayDataApply(hk.norm,
-                   2,
-                   FUN = log,
-                   base = 2,
-                   elt = "hk_norm")
-  
-  # create CV function
-  .calcCv <- function(x) {
-    sd(x) / mean(x)
-  }
-  cv.dat <- assayDataApply(hk.norm,
-                           elt = "log_q", MARGIN = 1, .calcCv)
-  
-  
-  # show the highest CD genes and their CV values
-  sort(cv.dat, decreasing = TRUE)[1:5]
-  
-  # Identify genes in the top 3rd of the CV values
-  goi <- names(cv.dat)[cv.dat > quantile(cv.dat, 0.8)]
-  
-  
-  # make gene list for plot
-  plot.genes <-
-    Biobase::assayDataElement(hk.norm, elt = "log_q")
-  
-  # Annotation column to use
-  anno.col <- 
-    as.data.frame(annotation$class)
-  
-  # make plot
-  p <- pheatmap(
-    plot.genes,
-    main = "Clustering high CV genes",
-    scale = "none",
-    show_rownames = TRUE,
-    show_colnames = TRUE,
-    border_color = NA,
-    clustering_method = "average",
-    cluster_rows = TRUE,
-    cluster_cols = TRUE,
-    clustering_distance_rows = "correlation",
-    clustering_distance_cols = "correlation",
-    breaks = seq(-3, 3, 0.05),
-    color = colorRampPalette(c("blue", "white", "red"))(120), 
-    annotation_col = anno.col
-  )
-
-    heatmap.output <- heatMap(object = hk.norm, 
-                        ngenes = 200, 
-                        scale.by.row.or.col = "row", 
-                        show.rownames = FALSE, 
-                        show.colnames = FALSE, 
-                        clustering.method = "average", 
-                        cluster.rows = TRUE, 
-                        cluster.cols = TRUE,
-                        clustering.distance.rows = "correlation", 
-                        clustering.distance.cols = "correlation", 
-                        annotation.row = NA, 
-                        annotation.col = c("class", "slide_name"), 
-                        breaks.by.values = seq(-3, 3, 0.05), 
-                        heatmap.color = colorRampPalette(c("blue", "white", "red"))(120), 
-                        norm.method = "hk_norm")
-
-
-    print(heatmap.output$plot)
-    
 ```
 
+## Differential Expression Analysis: Old group
 
-## 7. Differential Expression Analysis:
 
+```{r}
+
+# Set up the data frames with normalized counts and annotations
+# Make the Sample ID as rows
+
+norm.type <- "neg"
+
+if(norm.type == "hk"){
+  
+  norm.counts <- hk.norm_counts
+  
+} else if(norm.type == "neg"){ 
+  
+  norm.counts <- neg.norm_counts
+  
+} else if(norm.type == "q3"){
+  
+  norm.counts <- q3.norm_counts
+  
+}
+
+
+# Create a list to hold all of the DEG df results
+deg.df.list <- list()
+
+
+```
 
 ```{r Differential Expression Analysis,  echo=TRUE}
 
@@ -1174,13 +1398,7 @@ library(stats)
 library(dplyr)
 library(tidyr)
 
-
-
-
-
-
-# Make the Sample ID as rows
-counts.transposed <- as.data.frame(t(hk.norm_counts))
+counts.transposed <- as.data.frame(t(norm.counts))
 
 # Create a column for the Sample IDs and remove the .dcc
 counts.transposed$Sample_ID <- rownames(counts.transposed)
@@ -1192,7 +1410,7 @@ rownames(counts.transposed) <- NULL
 diff.eq.df <- merge(cleaned.annotation.df, counts.transposed, by = "Sample_ID")
 
 
-# Old BLZ945
+# BLZ945 treatment versus control
 
 subset.diff.eq <- subset(diff.eq.df, age == "old" & treatment %in% c("BLZ945", "control"))
 
@@ -1206,14 +1424,9 @@ anova_results <- sapply(colnames(subset.diff.eq)[-(1:23)], function(gene) {
   c(p_value, log_fc)
 })
 
-valid_genes <- complete.cases(anova_results)
-
 # Extract p-values and log-fold changes for valid genes
-p_values <- anova_results[1, valid_genes]
-log_fold_changes <- anova_results[2, valid_genes]
-
-# Extract gene IDs for valid genes
-gene_ids <- names(anova_results)[valid_genes]
+p_values <- anova_results[1, ]
+log_fold_changes <- anova_results[2, ]
 
 # Create results data frame for valid genes
 old.blz945.results_df <- data.frame(
@@ -1230,12 +1443,48 @@ old.blz945.results_df$adjusted_p_value <- p.adjust(old.blz945.results_df$p_value
 # Print first few rows of results
 print(head(old.blz945.results_df))
 
-write.csv(old.blz945.results_df, file.path(paste0(results.folder, "DE_Old_BLZ945.csv")), 
+write.csv(old.blz945.results_df, file.path(paste0(results.folder, norm.type, "_DE_Old_BLZ945.csv")), 
               row.names = FALSE)
 
 
+# Explore DEGs
+old.blz.degs <- old.blz945.results_df[old.blz945.results_df$adjusted_p_value < 0.05, ]
 
-# Old IP549
+deg.df.list[[paste0(norm.type, ".old.blz")]] <- old.blz.degs
+
+
+# Create a dataframe of counts for just the DEGs
+
+# Gather the DEG names
+old.blz.deg.list <- old.blz.degs$gene
+
+# Gather the annotations to include
+anno.columns.deg.counts <- c("Sample_ID", "treatment", "Animal #", "roi")
+deg.count.columns <- append(old.blz.deg.list, anno.columns.deg.counts)
+
+# Get only the counts for DEGs
+old.blz.deg.counts <- subset.diff.eq[, deg.count.columns, drop = FALSE]
+
+# Reorder the coutns by treatment
+old.blz.deg.counts <- old.blz.deg.counts[order(old.blz.deg.counts$treatment), ]
+
+# Correct bad target names
+names(old.blz.deg.counts) <- gsub(" ", "_", names(old.blz.deg.counts))
+
+# Create the summary table
+#summary_df <- old.blz.deg.counts %>%
+#  group_by(treatment) %>%
+#  summarize(RbIgG_mean = mean(as.numeric(Rb_IgG)),
+#            CD31_mean = mean(as.numeric(CD31)), 
+#            CD19_mean = mean(as.numeric(CD19))
+#            )
+
+# Print summary dataframe
+#print(summary_df)
+
+
+
+# IP549 treatment versus control
 
 subset.diff.eq <- subset(diff.eq.df, age == "old" & treatment %in% c("IP-549", "control"))
 
@@ -1273,10 +1522,20 @@ old.ip549.results_df$adjusted_p_value <- p.adjust(old.ip549.results_df$p_value, 
 # Print first few rows of results
 print(head(old.ip549.results_df))
 
-write.csv(old.ip549.results_df, file.path(paste0(results.folder, "DE_Old_IP549.csv")), 
+write.csv(old.ip549.results_df, file.path(paste0(results.folder, norm.type, "DE_Old_IP549.csv")), 
               row.names = FALSE)
 
+# Explore DEGs
+old.ip549.degs <- old.ip549.results_df[old.ip549.results_df$adjusted_p_value < 0.05, ]
 
+deg.df.list[[paste0(norm.type, ".old.ip549")]] <- old.ip549.degs
+
+```
+
+## Differential Expression Analysis: Young group
+
+
+```{r}
 # Young BLZ945
 
 subset.diff.eq <- subset(diff.eq.df, age == "young" & treatment %in% c("BLZ945", "control"))
@@ -1318,6 +1577,9 @@ print(head(young.blz945.results_df))
 write.csv(young.blz945.results_df, file.path(paste0(results.folder, "DE_Young_BLZ945.csv")), 
               row.names = FALSE)
 
+young.blz.degs <- young.blz945.results_df[young.blz945.results_df$adjusted_p_value < 0.05, ]
+
+deg.df.list[[paste0(norm.type, ".young.blz")]] <- young.blz.degs
 
 # Young IP549
 
@@ -1360,129 +1622,433 @@ print(head(young.ip549.results_df))
 write.csv(young.ip549.results_df, file.path(paste0(results.folder, "DE_Young_IP549.csv")), 
               row.names = FALSE)
 
+young.ip549.degs <- young.ip549.results_df[young.ip549.results_df$adjusted_p_value < 0.05, ]
+
+deg.df.list[[paste0(norm.type, ".young.ip549")]] <- young.ip549.degs
+
 ```
 
+# Limma
 
 
 ```{r}
-modelFormula = ~ class + (1 + class | slide)
 
-model.formula <- "~ treatment"
+library(dplyr)
+library(stringr)
 
-pData(norm.hk)$treatment <- factor(pData(norm.hk)$class, c("control", "IP549", "BLZ945"))
+# Remove the bad charcaters from cleaned annotation treatment column
 
-pData(norm.hk)[["slide"]] <- factor(pData(norm.hk)[["slide_name"]])
+cleaned.annotation.df <- cleaned.annotation.df %>%
+  mutate(treatment = str_replace_all(treatment, "-", ""))
 
-assayDataElement(object = norm.hk, elt = "hk_norm") <-
-    assayDataApply(norm.hk, 2, FUN = log, base = 2, elt = "hk_norm")
+# Select the log counts file for the normalization type of interest
 
-# run LMM:
-# formula follows conventions defined by the lme4 package
-results <- c()
-for(age in c("young", "old")) {
-    ind <- pData(norm.hk)$region == age
-    mixedOutmc <-
-        mixedModelDE(norm.hk[, ind],
-                     elt = "hk_norm",
-                     modelFormula = ~ treatment + (1 + treatment | 'Animal #'),
-                     groupVar = "treatment",
-                     nCores = parallel::detectCores(),
-                     multiCore = FALSE)
+norm.type <- "neg"
+
+if(norm.type == "hk"){
+  
+  norm.log.counts <- hk_log_counts
+  
+} else if(norm.type == "neg"){ 
+  
+  norm.log.counts <- neg_log_counts
+  norm.count <- neg.norm_counts
+  
+} else if(norm.type == "q3"){
+  
+  norm.log.counts <- q3_log_counts
+  
+}
+
+# Set up the DGEList object for age groups
+
+norm.log.counts <- norm.log.counts %>% select(-feature)
+
+#rownames(norm.log.counts) <- rownames(norm.counts)
+
+colnames(norm.log.counts) <- gsub("\\.dcc$", "", colnames(norm.log.counts))
+
+annotation.old <- cleaned.annotation.df[cleaned.annotation.df$age == "old", ]
+annotation.young <- cleaned.annotation.df[cleaned.annotation.df$age == "young", ]
+
+# Set up the count tables for old versus young
+
+old.sample.IDs <- annotation.old$Sample_ID
+young.sample.IDs <- annotation.young$Sample_ID
+
+old.counts <- norm.log.counts[, old.sample.IDs]
+young.counts <- norm.log.counts[, young.sample.IDs]
+
+# Create a DGE list object for each age group
+
+DGE.list.old <- DGEList(counts = old.counts, 
+                    samples = annotation.old)
+
+DGE.list.young <- DGEList(counts = young.counts, 
+                    samples = annotation.young)
+
+# Set up the design matrix for each age group
+
+design.old <- model.matrix(~ 0 + treatment, data = DGE.list.old$samples)
+design.young <- model.matrix(~ 0 + treatment, data = DGE.list.young$samples)
+
+# Run the linear model for each age group
+
+fit.old <- lmFit(DGE.list.old$counts, design.old)
+fit.young <- lmFit(DGE.list.young$counts, design.young)
+
+# Set up the contrasts of interest for each treatment type
+
+#old
+blz.old.contrast <- makeContrasts(treatmentBLZ945 - treatmentcontrol, 
+                                  levels = colnames(coef(fit.old)))
+
+ip549.old.contrast <- makeContrasts(treatmentIP549 - treatmentcontrol, 
+                                  levels = colnames(coef(fit.old)))
+
+#young
+blz.young.contrast <- makeContrasts(treatmentBLZ945 - treatmentcontrol, 
+                                  levels = colnames(coef(fit.young)))
+
+ip549.young.contrast <- makeContrasts(treatmentIP549 - treatmentcontrol, 
+                                  levels = colnames(coef(fit.young)))
+
+
+# Estimate contrast
+
+#old
+blz.old.contrast.estimate <- contrasts.fit(fit.old, blz.old.contrast)
+ip549.old.contrast.estimate <- contrasts.fit(fit.old, ip549.old.contrast)
+
+#young
+blz.young.contrast.estimate <- contrasts.fit(fit.young, blz.young.contrast)
+ip549.young.contrast.estimate <- contrasts.fit(fit.young, ip549.young.contrast)
+
+# Run Empirical Bayes smoothing of standard errors
+
+#old
+fit.blz.old.eb <- eBayes(blz.old.contrast.estimate, robust = TRUE)
+fit.ip549.old.eb <- eBayes(ip549.old.contrast.estimate, robust = TRUE)
+
+#young
+fit.blz.young.eb <- eBayes(blz.young.contrast.estimate, robust = TRUE)
+fit.ip549.young.eb <- eBayes(ip549.young.contrast.estimate, robust = TRUE)
+
+# Results for each contrast
+
+blz.old.results <- topTable(fit.blz.old.eb, sort.by = "P", n=Inf)
+ip549.old.results <- topTable(fit.ip549.old.eb, sort.by = "P", n=Inf)
+blz.young.results <- topTable(fit.blz.young.eb, sort.by = "P", n=Inf)
+ip549.young.results <- topTable(fit.ip549.young.eb, sort.by = "P", n=Inf)
+
+# Create deg lists for all contrasts
+all.deg.lists <- list(blz.old.degs = blz.old.results, 
+                  ip.old.degs = ip549.old.results, 
+                  blz.young.degs = blz.young.results, 
+                  ip.young.degs = ip549.young.results)
+
+# Filter for adj p-value and add column for significance level
+for(deg.list in names(all.deg.lists)){ 
+  all.deg.lists[[deg.list]] <- all.deg.lists[[deg.list]]  %>% 
+    filter(adj.P.Val < 0.05) %>% 
+    mutate(sig.level = case_when(
+      adj.P.Val > 0.01 & adj.P.Val < 0.05 ~ "*",
+      adj.P.Val > 0.001 & adj.P.Val <= 0.01 ~ "**",
+      adj.P.Val <= 0.001 ~ "***"))
+  }
+
+
+# Write all four DE results to csv files
+
+write.csv(blz.old.results, file.path(paste0(results.folder, "DE/", norm.type,  "_DE_Old_Blz.csv")), 
+              row.names = TRUE)
+
+write.csv(ip549.old.results, file.path(paste0(results.folder, "DE/", norm.type,  "_DE_Old_IP549.csv")), 
+              row.names = TRUE)
+
+write.csv(blz.young.results, file.path(paste0(results.folder, "DE/", norm.type,  "_DE_Young_Blz.csv")), 
+              row.names = TRUE)
+
+
+write.csv(ip549.young.results, file.path(paste0(results.folder, "DE/", norm.type,  "_DE_Young_IP549.csv")), 
+              row.names = TRUE)
+
+
+
+
+```
+
+
+# Box plots for proteins of interest
+
+```{r}
+
+library(ggplot2)
+library(scales)
+library(gridExtra)
+library(plotly)
+library(grid)
+
+# Remove the NTC rows from the annotation
+cleaned.annotation.df <- annotation.df[annotation.df$'slide name' != "No Template Control", ]
+
+# Arrange treatment order
+treatment.order <- c("control", "IP-549", "BLZ945")
+cleaned.annotation.df$treatment <- factor(cleaned.annotation.df$treatment,
+                                          levels = treatment.order)
+
+# Boxplot for Protein targets
+
+# Gather all targets
+feature.list = rownames(neg_log_counts)
+
+# Set up the normalized counts
+
+for(feature in feature.list){
+  
+  # Grab the counts
+  feature.counts <- neg_log_counts[feature, , drop = FALSE]
+  
+  # Make the Sample ID as rows
+  feature.counts.df <- as.data.frame(t(feature.counts))
+  
+  # Create a column for the Sample IDs and remove the .dcc
+  feature.counts.df$Sample_ID <- rownames(feature.counts.df)
+  feature.counts.df$Sample_ID <- gsub("\\.dcc$", "", feature.counts.df$Sample_ID)
+  rownames(feature.counts.df) <- NULL
+  
+  
+  # Combine the counts with the annotation based on Sample ID
+  feature.boxplot.df <- merge(cleaned.annotation.df, feature.counts.df, by = "Sample_ID")
+  
+  # Convert counts from characater to numeric
+  feature.boxplot.df[[feature]] <- as.numeric(feature.boxplot.df[[feature]])
+
+  # Create the boxplots for the two age groups, then combine into a single image
+  
+  feature.boxplot.df.old <- feature.boxplot.df[feature.boxplot.df$age == "old", ]
     
-    # format results as data.frame
-    r_test <- do.call(rbind, mixedOutmc["lsmeans", ])
-    tests <- rownames(r_test)
-    r_test <- as.data.frame(r_test)
-    r_test$Contrast <- tests
+  feature.boxplot.df.young <- feature.boxplot.df[feature.boxplot.df$age == "young", ]
+  
+  y.scale.max <- max(feature.boxplot.df[[feature]]) + 1
+  y.scale.min <- min(feature.boxplot.df[[feature]]) - 1
+  
+  # Set labels at no significance unless changed below
+  label.old.blz = "NS"
+  label.old.ip = "NS"
+  label.young.blz = "NS"
+  label.young.ip = "NS"
+  
+  # Gather the significance level for each contrast
+  if(feature %in% rownames(all.deg.lists$blz.old.degs)) { 
     
-    # use lapply in case you have multiple levels of your test factor to
-    # correctly associate gene name with it's row in the results table
-    r_test$Gene <- 
-        unlist(lapply(colnames(mixedOutmc),
-                      rep, nrow(mixedOutmc["lsmeans", ][[1]])))
-    r_test$Subset <- status
-    r_test$FDR <- p.adjust(r_test$`Pr(>|t|)`, method = "fdr")
-    r_test <- r_test[, c("Gene", "Subset", "Contrast", "Estimate", 
-                         "Pr(>|t|)", "FDR")]
-    results <- rbind(results, r_test)
+    label.old.blz <- all.deg.lists$blz.old.degs[feature, "sig.level"]
+    
+  }
+  
+  if(feature %in% rownames(all.deg.lists$ip.old.degs)){ 
+    
+      label.old.ip <- all.deg.lists$ip.old.degs[feature, "sig.level"]
+      
+  }
+  
+  if(feature %in% rownames(all.deg.lists$blz.young.degs)){ 
+    
+      label.young.blz <- all.deg.lists$blz.young.degs[feature, "sig.level"]
+  
+  }
+  
+  if(feature %in% rownames(all.deg.lists$ip.young.degs)){ 
+    
+      label.young.ip <- all.deg.lists$ip.young.degs[feature, "sig.level"]
+      
+  }
+      
+      
+      
+  
+  feature.boxplot.old <- ggplot(feature.boxplot.df.old, aes(x = treatment, y = !!sym(feature))) + 
+    geom_boxplot(notch = FALSE) + 
+    ggtitle("Old") + 
+    labs(x = "Treatment", y = paste0(feature, " log2 counts")) + 
+    scale_y_continuous(labels = scales::comma) + 
+    ylim(y.scale.min, y.scale.max) + 
+    annotate("text", 
+             x = 1.5, 
+             y = y.scale.max-0.55, 
+             label = label.old.ip, 
+             vjust = 1.5, 
+             hjust = 0) + 
+    annotate("segment", 
+             x = 1, 
+             xend = 2, 
+             y = y.scale.max-0.7, 
+             yend = y.scale.max-0.7) + 
+    annotate("text", 
+             x = 2, 
+             y = y.scale.max-0.15, 
+             label = label.old.blz, 
+             vjust = 1.5, 
+             hjust = 0) + 
+    annotate("segment", 
+             x = 1, 
+             xend = 3, 
+             y = y.scale.max-0.3, 
+             yend = y.scale.max-0.3)
+  
+  feature.boxplot.young <- ggplot(feature.boxplot.df.young, aes(x = treatment, y = !!sym(feature))) + 
+    geom_boxplot(notch = FALSE) + 
+    ggtitle("Young") +
+    labs(x = "Treatment", y = paste0(feature, " log2 counts")) + 
+    scale_y_continuous(labels = scales::comma) + 
+    ylim(y.scale.min, y.scale.max) + 
+    annotate("text",
+             x = 1.5, 
+             y = y.scale.max-0.55, 
+             label = label.young.ip, 
+             vjust = 1.5, 
+             hjust = 0) + 
+    annotate("segment", 
+             x = 1, 
+             xend = 2, 
+             y = y.scale.max-0.7, 
+             yend = y.scale.max-0.7) + 
+    annotate("text", 
+             x = 2, 
+             y = y.scale.max-0.15, 
+             label = label.young.blz, 
+             vjust = 1.5, 
+             hjust = 0) + 
+    annotate("segment", 
+             x = 1, 
+             xend = 3, 
+             y = y.scale.max-0.3, 
+             yend = y.scale.max-0.3)
+  
+  feature.combined.boxplot <- grid.arrange(feature.boxplot.young, feature.boxplot.old, ncol = 2)
+  
+  title <- textGrob(paste0(feature,  " signal by Age and Treatment"), gp = gpar(fontsize = 20, fontface = "bold"))
+  
+  final.feature.boxplot <- grid.arrange(title, feature.combined.boxplot, heights = c(0.1, 0.9))
+  
+  # Replace bad characters for export
+  if(grepl("/", feature)){
+    feature <- gsub("/", "_", feature)
+  }
+  
+  export.boxplot <- TRUE
+  
+  if(export.boxplot == TRUE){
+    ggsave(paste0(project.folder.path, "results/boxplots/neg_normalization_log/", feature, "_boxplot_age_neg_log.png"), final.feature.boxplot, width = 12, height = 10)
+  }
+  
 }
 
 ```
 
 
+# Create a summary table of DEGs
 
 ```{r}
 
+library(knitr)
+library(kableExtra)
+library(dplyr)
 
-    goi <- c("CD274", "CD8A", "CD68", "EPCAM",
-             "KRT18", "NPHS1", "NPHS2", "CALB1", "CLDN8")
+norm.type <- "neg"
+
+theme <- ttheme_default()
+
+df_to_grob <- function(df) {
+  if (nrow(df) == 0) {
+    # Create an empty tableGrob object
+    empty_grob <- tableGrob(matrix("", nrow = 1, ncol = ncol(df)), 
+                            theme = theme)
+    return(empty_grob)
+  } else {
+    # Convert dataframe to tableGrob
+    table_grob <- tableGrob(df, theme = theme)
+    return(table_grob)
+  }
+}
+
+# Separate the up and down regulated genes
+
+# Initialize empty lists to store filtered data frames
+old.dfs <- list()
+young.dfs <- list()
+
+
+for(df_name in names(deg.df.list)) {
+  # Check if the data frame name starts with "neg"
+  if(grepl(norm.type, df_name)) {
     
-    object <- q3.normalization.output$object
-    object <- object[goi,]
-    Gene <- Subset <- NULL
-    
-    #First analysis:
-    reslist.1 <- diffExpr(object = object, 
-                          analysis.type = "Within Groups", 
-                          region.col = "region", 
-                          regions = c("glomerulus", "tubule"), 
-                          group.col = "class", 
-                          groups = c("DKD", "normal"), 
-                          n.cores = 1)
-    grid.draw(reslist.1$sample_table)
-    grid.newpage()
-    grid.draw(reslist.1$summary_table)
-    
-    lfc_col1 <- colnames(reslist.1$result)[grepl("logFC",colnames(reslist.1$result))]
-    pval_col1 <- colnames(reslist.1$result)[grepl("_pval",colnames(reslist.1$result))]
-    
-    lfc.1 <- reslist.1$result %>% 
-              dplyr::filter(Gene == "CALB1" & Subset == "normal") %>% 
-              select(all_of(lfc_col1)) %>% 
-              as.numeric()
-    pval.1 <- reslist.1$result %>% 
-              dplyr::filter(Gene == "CALB1" & Subset == "normal") %>% 
-              select(all_of(pval_col1)) %>% 
-              as.numeric()
-    
-    cat(paste0("\n\nvalue of CALB Fold Change is:", lfc.1))
-    cat("expected value is -2.014")
-    
-    cat(paste0("\nvalue of CALB pval is:",pval.1))
-    cat("expected value is 0.0274")
-    
-    #Second analysis:
-    reslist.2 <- diffExpr(object = object, 
-                          analysis.type = "Between Groups", 
-                          region.col = "region", 
-                          regions = c("glomerulus", "tubule"), 
-                          group.col = "class", 
-                          groups = c("DKD", "normal"), 
-                          n.cores = 1)
-    grid.draw(reslist.2$sample_table)
-    grid.newpage()
-    grid.draw(reslist.2$summary_table)
-    
-    lfc_col2 <- colnames(reslist.2$result)[grepl("logFC",colnames(reslist.2$result))]
-    pval_col2 <- colnames(reslist.2$result)[grepl("_pval",colnames(reslist.2$result))]
-    
-    lfc.2 <- reslist.2$result %>% 
-              dplyr::filter(Gene == "CALB1" & Subset == "tubule") %>% 
-              select(all_of(lfc_col2)) %>% 
-              as.numeric()
-    pval.2 <- reslist.2$result %>% 
-              dplyr::filter(Gene == "CALB1" & Subset == "tubule") %>% 
-              select(all_of(pval_col2)) %>% 
-              as.numeric()
-    
-    cat(paste0("\n\nvalue of CALB Fold Change is:", lfc.2))
-    cat("expected value is -1.408")
-    
-    cat(paste0("\nvalue of CALB pval is:",pval.2))
-    cat("expected value is 0.01268")
-    
+    if(grepl("old", df_name)) {
+      
+      if(grepl("blz", df_name)) {
+        
+        old.blz <- deg.df.list[[df_name]] %>% arrange(desc(log_fold_change))
+        
+      } else if(grepl("ip", df_name)){
+       
+        old.ip549 <- deg.df.list[[df_name]] %>% arrange(desc(log_fold_change))
+         
+      }
+      
+    } else if(grepl("young", df_name)){
+      
+      # Sort the data frame based on the sign of log fold change
+      if(grepl("blz", df_name)) {
+        
+        young.blz <- deg.df.list[[df_name]] %>% arrange(desc(log_fold_change))
+        
+      } else if(grepl("ip", df_name)){
+       
+        young.ip549 <- deg.df.list[[df_name]] %>% arrange(desc(log_fold_change))
+         
+      }
+    }
+  }
+}
+
+# Convert data frames to grobs
+old_blz_grob <- df_to_grob(old.blz)
+old_ip549_grob <- df_to_grob(old.ip549)
+young_blz_grob <- df_to_grob(young.blz)
+young_ip549_grob <- df_to_grob(young.ip549)
+
+#old_aligned <- gtable_combine(old_blz_grob,old_ip549_grob, along=2)
+#young_aligned <- gtable_combine(young_blz_grob,young_ip549_grob, along=2)
+
+#grid.newpage()
+
+#grid.arrange(old_aligned, young_aligned, ncol = 2)
+
+
+
+
+# Arrange grobs into a single table
+#combined_table <- grid.arrange(old_blz_grob, 
+#                               old_ip549_grob, 
+#                               young_blz_grob, 
+#                               young_ip549_grob, 
+#                               ncol = 2, 
+#                               nrow = 2, 
+#                               padding = unit(2, "lines"))
+
+# Display the table
+grid.newpage()
+
+old_blz_grob <- gtable::gtable_matrix(as.matrix(old.blz))
+
+grid.table(old_blz_grob)
+
+
+
+
 
 ```
+
 ## 8. Volcano Plot
 
 #This part is run on NIDAP.
