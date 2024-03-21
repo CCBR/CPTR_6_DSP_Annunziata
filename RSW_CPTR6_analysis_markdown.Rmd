@@ -35,7 +35,7 @@ options(timeout = max(300, getOption("timeout")))
 
 library(readxl)
 
-project.folder.path <- "/rstudio-files/ccr-dceg-data/users/ned/CPTR/CPTR-6 Annunziata/CPTR_6_DSP_Annunziata/"
+project.folder.path <- "/rstudio-files/ccr-dceg-data/users/ned/CPTR/CPTR-6 Annunziata/"
 
 dcc.files <- dir(
   file.path(paste0(project.folder.path, "dccs")),
@@ -215,7 +215,7 @@ library(GeomxTools)
 library(tibble)
 library(dplyr)
 
-results.folder <- "/rstudio-files/ccr-dceg-data/users/ned/CPTR/CPTR-6 Annunziata/CPTR_6_DSP_Annunziata/results/"
+results.folder <- "/rstudio-files/ccr-dceg-data/users/ned/CPTR/CPTR-6 Annunziata/results/"
 
 # Set the QC flags using the Nanostring defaults
 qc.output <-  setSegmentQCFlags(object, 
@@ -501,9 +501,7 @@ if(export.qc.flag.summary == TRUE){
   
   if(export_counts == TRUE){
     
-    write.csv(raw_counts, 
-              file.path(paste0(results.folder, "raw_counts.csv")), 
-              row.names = FALSE)
+    
 
     write.csv(hk.norm_counts, 
               file.path(paste0(results.folder, "hk_norm_counts.csv")), 
@@ -520,6 +518,22 @@ if(export.qc.flag.summary == TRUE){
     
   }
   
+  
+  export.norm.counts <- FALSE
+  
+  if(export.norm.counts == TRUE){
+    
+    write.csv(neg.norm_counts, 
+              file.path(paste0(results.folder, 
+                               "neg_norm_counts.csv")), 
+              row.names = FALSE)
+    
+    write.csv(neg_log_counts, 
+              file.path(paste0(results.folder, 
+                               "neg_norm_log_counts.csv")), 
+              row.names = FALSE)
+    
+  }
   
   
 ```
@@ -551,6 +565,7 @@ marker.counts.df$Sample_ID <- gsub("\\.dcc$", "", marker.counts.df$Sample_ID)
 rownames(marker.counts.df) <- NULL
 
 # Combine the counts with the annotation based on Sample ID
+cleaned.annotation.df <- annotation.df[annotation.df$'slide name' != "No Template Control", ]
 marker.boxplot.df <- merge(cleaned.annotation.df, marker.counts.df, by = "Sample_ID")
 
 ```
@@ -617,7 +632,7 @@ for(marker in marker.features){
   y.lower.limit <- min(marker.boxplot.df[[marker]]) - 0.5
 
   # Separate by age
-  for(age.type in unique(marker.barplot.df$age)){
+  for(age.type in unique(marker.boxplot.df$age)){
     
     # Subset the marker data by age
     marker.boxplot.df.age <- marker.boxplot.df %>%filter(age == age.type)
@@ -722,32 +737,10 @@ for(age.type in unique(marker.boxplot.df$age)){
   # Export the boxplot named by age
     export.age.boxplot <- TRUE
   if(export.age.boxplot == TRUE){
-    ggsave(paste0(project.folder.path, "qc/marker_qc_plots/", marker, "boxplot_roi_", age.type, ".png"), roi.marker.boxplot, width = 12, height = 1)
+    ggsave(paste0(project.folder.path, "qc/nuclei_qc_plots/boxplot_nuclei_roi_", age.type, ".png"), roi.nuclei.boxplot, width = 12, height = 12)
   }
 
 }
-  
-# Create a boxplot for for expression per animal #
-roi.combined.marker.boxplot <- ggplot(marker.boxplot.df, aes(x = animal_roi, y= !!sym(marker), color = treatment)) + 
-geom_boxplot(notch = FALSE) + 
-ggtitle(paste0(marker, " expression per roi")) +
-scale_y_continuous(labels = scales::comma) + 
-ylim(y.lower.limit, y.upper.limit) + 
-labs(x = "Animal #", y = paste0(marker, " log2 counts")) + 
-theme(axis.text.x = element_text(size = 5, angle = 90)) + 
-facet_wrap(.~age, scales = "free_x")
-
-
-# Export the marker expression by animal number boxplot
-export.combined.boxplot <- TRUE
-if(export.combined.boxplot == TRUE){
-  
-  ggsave(paste0(project.folder.path, "qc/marker_qc_plots/", marker, "boxplot_roi_combined.png"), roi.combined.marker.boxplot, width = 12, height = 1)
-  
-}
-  
-
-
 ```
 
 
@@ -1183,6 +1176,21 @@ ggplotly(nuclei.roi.bar.plot)
          height = 12, width = 40)
 
 ```
+
+# Use PCA tools
+
+```{r}
+
+# See reference vignette: https://bioconductor.org/packages/release/bioc/vignettes/PCAtools/inst/doc/PCAtools.html#introduction
+
+library(stringr)
+library(dplyr)
+library(PCAtools)
+
+
+
+```
+
 
 # Unsupervised subset for age groups
 
